@@ -1,0 +1,247 @@
+heat_template_version: 2015-10-15
+
+description: A webcluster in one template.
+## Use as: openstack stack create -t 01_create_cluster.yml -e 00_params.yaml -e 00_registry.yaml stack01
+
+parameters:
+
+  project:
+    type: string
+  key_name:
+    type: string
+  flavor:
+    type: string
+  lbflavor:
+    type: string
+  image:
+    type: string
+  app_port:
+    type: string
+  lb_port:
+    type: string
+  public_net:
+    type: string
+  private_net_name:
+    type: string
+  private_net_cidr:
+    type: string
+  private_net_gateway:
+    type: string
+  private_net_pool_start:
+    type: string
+  private_net_pool_end:
+    type: string
+
+
+
+################
+## Networking ##
+################
+
+resources:
+# Networking as a resource doesn't work
+# Therefore it is included in this template
+#
+#  network:
+#    type: My::Cluster::Network
+#    properties:
+#      project: { get_param: project }
+#      app_port: { get_param: app_port }
+#      lb_port: { get_param: lb_port }
+#      public_net_name: { get_param: public_net }
+#      private_net_name: { get_param: private_net_name }
+#      private_net_cidr: { get_param: private_net_cidr }
+#      private_net_gateway: { get_param: private_net_gateway }
+#      private_net_pool_start: { get_param: private_net_pool_start }
+#      private_net_pool_end: { get_param: private_net_pool_end }
+
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: 
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: private_net_name }]]
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      dns_nameservers: [{ get_param: private_net_gateway }]
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      admin_state_up: true
+#      ha: true #Neutron restricts usage of this property to administrative users only
+#      distributed: true #Neutron restricts usage of this property to administrative users only
+      external_gateway_info:
+        network: { get_param: public_net }
+
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet_id: { get_resource: private_subnet }
+
+  sec_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-internal']]
+      rules:
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: egress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          port_range_min: { get_param: app_port }
+          port_range_max: { get_param: app_port }
+        - remote_ip_prefix: 10.0.0.0/8
+          protocol: tcp
+          direction: ingress
+          port_range_min: 22
+          port_range_max: 22
+        - remote_ip_prefix: 10.0.0.0/8
+          protocol: tcp
+          direction: egress
+          port_range_min: 22
+          port_range_max: 22
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: egress
+#ICMP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: egres
+
+  sec_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+#      name: { get_param:  }
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-external-allow-all']]
+      rules:
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: ingress
+
+
+############
+## LBaaS ###
+############
+#not needed if you use lbserver instances
+
+  loadbalancer:
+    type: My::Cluster::Loadbalancer
+    properties:
+      app_port: { get_param: app_port }
+      lb_port: { get_param: lb_port }
+      public_net: { get_param: public_net }
+      private_net_cidr: { get_param: private_net_cidr }
+      subnet_id: { get_resource: private_subnet }
+
+################
+## Instances ###
+################
+#not needed if you use lbaas (count = 0)
+#needs work to be able to use VRRP with opencontrail
+
+  lbserver:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: 0
+      resource_def:
+          type: My::Cluster::InstanceInternal
+          properties:
+            name:
+              list_join: ['-', [ {get_param: 'OS::stack_name'}, 'lb%index%']]
+            key_name: { get_param: key_name }
+            image: { get_param: image }
+            flavor: { get_param: lbflavor }
+            private_net: { get_resource: private_net }
+            sec_group: { get_resource: sec_group }
+            private_subnet: { get_resource: private_subnet }
+
+  appserver:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: 4
+      resource_def:
+          type: My::Cluster::InstancePool
+          properties:
+            name: 
+              list_join: ['-', [ {get_param: 'OS::stack_name'}, 'app%index%']]
+            key_name: { get_param: key_name }
+            image: { get_param: image }
+            flavor: { get_param: flavor }
+            private_net: { get_resource: private_net }
+            sec_group: { get_resource: sec_group }
+            app_port: { get_param: app_port }
+# userdata can't be passed as parameter and is defined in the resource.
+            user_data_file: 'user_data_appserver.sh'
+            pool: { get_attr: [ loadbalancer, pool_id]}
+            private_subnet: { get_resource: private_subnet }
+
+  deployserver:
+    type: My::Cluster::InstanceFloat
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'deployserver']]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      private_net: { get_resource: private_net }
+      private_subnet: { get_resource: private_subnet }
+      sec_group: { get_resource: sec_group }
+      public_net: { get_param: public_net }
+
+
+#############
+## Outputs ##
+#############
+
+outputs:
+  Private_network_id:
+    value: { get_resource: private_net }
+    description: GUID of the network created by this template
+  Private_subnet_id:
+    value: { get_resource: private_subnet }
+    description: GUID of the subnet created by this template
+  Network_router_id:
+    value: { get_resource: router }
+    description: GUID of the router created by this templ
+  Loadbalancer_id:
+    value: { get_attr: [ loadbalancer, loadbalancer_id ] }
+    description: GUID of the loadbalancer
+  Pool_id:
+    value: { get_attr: [ loadbalancer, pool_id]}
+    description: GUID of the pool associated with this loadbalancer
+  LB_Floating_ip_id:
+    value: { get_attr: [ loadbalancer, floating_ip_id ] }
+    description: GUID of the floating ip
+  LB_Floating_ip:
+    value: { get_attr: [ loadbalancer, floating_ip ] }
+    description: The floating ip
+  Appservers_ip:
+    description: "ip addresses of appservers"
+    value: { get_attr: [ appserver, instance_ip]}
+  Deployserver_Float_ip:
+    value: { get_attr: [ deployserver, floating_ip ] }
+    description: The floating ip
+
+

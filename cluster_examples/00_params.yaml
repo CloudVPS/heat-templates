@@ -1,0 +1,43 @@
+parameters:
+
+  project: 8fdc053da26b47ef9b679e49fe447830
+#    description: ID of project to create resources in
+  key_name: jumphost
+#    description: Name of keypair to assign to servers
+  flavor: "Standard 1GB"
+  lbflavor: "Standard 1GB"
+#    description: Flavor used for servers
+  image: "Ubuntu 16.04 (LTS)"
+#    description: Image used for servers
+
+  app_port: 80
+#    default: 80
+#    description: Port used by the appservers (webservers) internal
+  lb_port: 80
+#    default: 80
+#    description: Port used by the load balancer facing external
+
+  public_net: floating
+##    default: floating
+##    description: ID or name of public network for which floating IP addresses will be allocated
+  private_net_name: net-private-01
+#    default: net-private-01
+#    description: Name of private network to be created
+  private_net_cidr: 10.0.0.0/24
+#    default: 10.0.0.0/24
+#    description: Private network address (CIDR notation)
+  private_net_gateway: 10.0.0.1
+#    default: 10.0.0.1
+#    description: Private network gateway address
+  private_net_pool_start: 10.0.0.10
+#    default: 10.0.0.10
+#    description: Start of private network IP address allocation pool
+  private_net_pool_end: 10.0.0.250
+#    default: 10.0.0.250
+#    description: End of private network IP address allocation pool
+
+
+
+
+
+

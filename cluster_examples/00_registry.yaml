@@ -1,0 +1,8 @@
+resource_registry:
+  My::Cluster::Network:                ./resources/02_network.yaml
+  My::Cluster::Loadbalancer:           ./resources/03_lbaas.yaml
+  My::Cluster::InstancePool:           ./resources/04_instance_pool.yaml
+  My::Cluster::InstancePoolVol:        ./resources/04_instance_pool_vol.yaml
+  My::Cluster::InstanceInternal:       ./resources/04_instance_internal.yaml
+  My::Cluster::InstanceFloat:          ./resources/04_instance_float.yaml
+
