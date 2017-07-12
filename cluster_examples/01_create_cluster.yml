@@ -41,19 +41,6 @@ parameters:
 resources:
 # Networking as a resource doesn't work
 # Therefore it is included in this template
-#
-#  network:
-#    type: My::Cluster::Network
-#    properties:
-#      project: { get_param: project }
-#      app_port: { get_param: app_port }
-#      lb_port: { get_param: lb_port }
-#      public_net_name: { get_param: public_net }
-#      private_net_name: { get_param: private_net_name }
-#      private_net_cidr: { get_param: private_net_cidr }
-#      private_net_gateway: { get_param: private_net_gateway }
-#      private_net_pool_start: { get_param: private_net_pool_start }
-#      private_net_pool_end: { get_param: private_net_pool_end }
 
   private_net:
     type: OS::Neutron::Net
@@ -88,26 +75,26 @@ resources:
       router_id: { get_resource: router }
       subnet_id: { get_resource: private_subnet }
 
-  sec_group:
+  sec_group_internal:
     type: OS::Neutron::SecurityGroup
     properties:
       name:
         list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-internal']]
       rules:
 #TCP
-        - remote_ip_prefix: 0.0.0.0/0
+        - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: tcp
           direction: egress
-        - remote_ip_prefix: 0.0.0.0/0
+        - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: tcp
           port_range_min: { get_param: app_port }
           port_range_max: { get_param: app_port }
-        - remote_ip_prefix: 10.0.0.0/8
+        - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: tcp
           direction: ingress
           port_range_min: 22
           port_range_max: 22
-        - remote_ip_prefix: 10.0.0.0/8
+        - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: tcp
           direction: egress
           port_range_min: 22
@@ -117,28 +104,30 @@ resources:
           protocol: udp
           direction: egress
 #ICMP
-        - remote_ip_prefix: 0.0.0.0/0
+        - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: icmp
           direction: ingress
-        - remote_ip_prefix: 0.0.0.0/0
+        - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: icmp
           direction: egres
 
-  sec_group:
+  sec_group_external:
     type: OS::Neutron::SecurityGroup
     properties:
-#      name: { get_param:  }
       name:
-        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-external-allow-all']]
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-external-allow-http-ssh']]
       rules:
 #TCP
         - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: ingress
-#UDP
+          port_range_min: { get_param: app_port }
+          port_range_max: { get_param: app_port }
         - remote_ip_prefix: 0.0.0.0/0
-          protocol: udp
+          protocol: tcp
           direction: ingress
+          port_range_min: 22
+          port_range_max: 22
 
 
 ############
@@ -154,6 +143,7 @@ resources:
       public_net: { get_param: public_net }
       private_net_cidr: { get_param: private_net_cidr }
       subnet_id: { get_resource: private_subnet }
+      sec_group: { get_resource: sec_group_external }
 
 ################
 ## Instances ###
@@ -174,7 +164,7 @@ resources:
             image: { get_param: image }
             flavor: { get_param: lbflavor }
             private_net: { get_resource: private_net }
-            sec_group: { get_resource: sec_group }
+            sec_group: { get_resource: sec_group_internal }
             private_subnet: { get_resource: private_subnet }
 
   appserver:
@@ -190,7 +180,7 @@ resources:
             image: { get_param: image }
             flavor: { get_param: flavor }
             private_net: { get_resource: private_net }
-            sec_group: { get_resource: sec_group }
+            sec_group: { get_resource: sec_group_internal }
             app_port: { get_param: app_port }
 # userdata can't be passed as parameter and is defined in the resource.
             user_data_file: 'user_data_appserver.sh'
@@ -207,7 +197,7 @@ resources:
       flavor: { get_param: flavor }
       private_net: { get_resource: private_net }
       private_subnet: { get_resource: private_subnet }
-      sec_group: { get_resource: sec_group }
+      sec_group: { get_resource: sec_group_external }
       public_net: { get_param: public_net }
 
 

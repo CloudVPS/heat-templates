@@ -1,0 +1,22 @@
+heat_template_version: 2016-04-08
+
+parameters:
+  index:
+    type: number
+  pool:
+    type: string
+  internal_server_ips:
+    type: comma_delimited_list
+  protocol_port:
+    type: string
+  subnet:
+    type: string
+
+resources:
+  myPoolMember:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      pool: { get_param: pool }
+      address: { get_param: [internal_server_ips, {get_param: index}] }
+      protocol_port: { get_param: protocol_port }
+      subnet: { get_param: subnet }

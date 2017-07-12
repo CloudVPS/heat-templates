@@ -13,13 +13,24 @@ parameters:
     type: string
   subnet_id:
     type: string
-    
+  sec_group:
+    type: string    
 
 resources:
 
 ############
 ## LBaaS ###
 ############
+
+  lb_vip_port:
+    type: OS::Neutron::Port
+    properties:
+      security_groups: [{ get_param: sec_group }]
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - subnet_id: { get_resource: private_subnet }
+
+
 
   loadbalancer:
     type: OS::Neutron::LBaaS::LoadBalancer
