@@ -1,0 +1,149 @@
+heat_template_version: 2016-04-08
+
+description: Create a LBaaS Loadbalancer for existing servers in a internal network.
+## Use as: openstack stack create -t LBaaS.yml -e LBaaS_env.yml stackname
+## WIP: Needs to have ports added for the security group
+## %index% does not work!
+
+################
+## Parameters ##
+################
+
+parameters:
+  internal_server_count:
+    type: number
+    label: Internal Sever Count
+    description: Number of internal servers
+    default: 2
+
+  internal_server_ips:
+    type: comma_delimited_list
+    label: Internal Sever IPs
+    description: Comma delimited list of IPs for the internal servers
+    default: ["10.0.0.5",
+              "10.0.0.6",
+             ]
+
+  internal_port: 
+    type: string
+    label: Internal Sever IPs
+    description: Port used by the internal servers
+    default: 80
+
+  lb_port: 
+    type: string
+    label: 
+    description: Port used by the load balancer facing external
+    default: 80
+
+  protocol:
+    type: string
+    label: 
+    description: Protocol to be loadbalanced (HTTP, HTTPS or TCP)
+    default: HTTP
+
+  public_net: 
+    type: string
+    label: 
+    description: ID or name of public network for which floating IP addresses will be allocated
+    default: floating
+
+  private_subnet: 
+    type: string
+    label: 
+    description: Name of private network
+    default: private-subnet
+
+#  security_group_name:
+#    default: default
+#    description: Name of the security group for the loadbalancer
+#    type: string
+
+#resource_registry:
+#  My::Cluster::PoolMembers:
+#    parameters:
+#    resources:
+#
+#      resource_def:
+#        type: OS::Neutron::LBaaS::PoolMember
+#        properties:
+#          pool: { get_resource: pool }
+#          address: { get_param: [internal_server_ips, {get_param: index}] }
+#          protocol_port: { get_param: internal_port }
+#          subnet: { get_param: private_subnet }
+
+
+resources:
+
+############
+## LBaaS ###
+############
+
+  loadbalancer:
+    type: OS::Neutron::LBaaS::LoadBalancer
+    properties:
+      vip_subnet: { get_param: private_subnet }
+
+  listener:
+    type: OS::Neutron::LBaaS::Listener
+    properties:
+      loadbalancer: { get_resource: loadbalancer }
+      protocol: { get_param: protocol }
+      protocol_port: { get_param: lb_port }
+
+  pool:
+    type: OS::Neutron::LBaaS::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      protocol: { get_param: protocol }
+      listener: { get_resource: listener }
+
+  pool_members:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: internal_server_count }
+      resource_def:
+        type: OS::Neutron::LBaaS::PoolMember
+        properties:
+          pool: { get_resource: pool }
+          address: { get_param: internal_server_ips, "%index%" }
+          protocol_port: { get_param: internal_port }
+          subnet: { get_param: private_subnet }
+
+  monitor:
+    type: OS::Neutron::LBaaS::HealthMonitor
+    properties:
+      delay: 3
+      type: { get_param: protocol }
+      timeout: 3
+      max_retries: 3
+      pool: { get_resource: pool }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_net }
+      port_id: { get_attr: [loadbalancer, vip_port_id ]}
+
+
+#############
+## Outputs ##
+#############
+
+outputs:
+  Loadbalancer_id:
+    value: { get_attr: [ loadbalancer ] }
+    description: GUID of the loadbalancer
+  Pool_id:
+    value: { get_attr: [ pool ] }
+    description: GUID of the pool associated with this loadbalancer
+  LB_Floating_ip_id:
+    value: { get_attr: [ floating_ip ] }
+    description: GUID of the floating ip
+#  LB_Floating_ip:
+#    value: { get_attr: [ floating_ip, floating_ip ] }
+#    description: The floating ip
+#  Appservers_ip:
+#    description: "ip addresses of internal servers"
+#    value: { get_attr: [ internal_port, instance_ip]}
+
