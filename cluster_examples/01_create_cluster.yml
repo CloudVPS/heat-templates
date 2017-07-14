@@ -109,7 +109,7 @@ resources:
           direction: ingress
         - remote_ip_prefix: { get_param: private_net_cidr }
           protocol: icmp
-          direction: egres
+          direction: egress
 
   sec_group_external:
     type: OS::Neutron::SecurityGroup

@@ -1,0 +1,247 @@
+heat_template_version: '2015-04-30'
+
+description: Create 2 instances with a additional port for VRRP in a existing internal network.
+## Use as: openstack stack create -t VRRP_2instances.yml stackname
+
+################
+## Parameters ##
+################
+
+parameters:
+#  VRRP_server_count:
+#    type: number
+#    label: Internal Sever Count
+#    description: Number of internal servers
+#    default: 2
+
+  VRRP_servers_basename:
+    type: string
+    label: Instance base name
+    description: Base name of VRRP instances
+    default: "LB"
+
+  key_name:
+    type: string
+    label: SSH Key
+    description: Name or id of your ssh key
+    default: jumphost
+
+  flavor: 
+    type: string
+    label: Instance Flavor
+    description: Flavor of the VRRP instances
+    default: "Standard 1GB"
+
+  image:
+    type: string
+    label: Instance Image
+    description: Image for the VRRP instance
+    default: "Ubuntu 16.04 (LTS)"
+
+  floating_net:
+    type: string
+    label: Public net 
+    description: Name of public network for floating IP
+    default: floating
+
+  private_net:
+    type: string
+    label:
+    description: Name of private network
+    default: private-net
+
+  private_subnet: 
+    type: string
+    label: 
+    description: Name of private network
+    default: private-subnet
+
+  sec_group:
+    type: string
+    label: Security Group
+    description: Name or ID of the existing security group for the instances (VRRP is allowed in new group)
+    default: default
+
+resources:
+#####################
+## Security Groups ##
+#####################
+
+  sec_group_vrrp:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-vrrp']]
+      rules:
+        - remote_mode: remote_group_id
+          protocol: 112
+          direction: egress
+        - remote_mode: remote_group_id
+          protocol: 112
+          direction: ingress
+        - remote_mode: remote_group_id
+          protocol: tcp
+          direction: ingress
+          port_range_min: 22
+          port_range_max: 22
+        - remote_mode: remote_group_id
+          protocol: tcp
+          direction: egress
+          port_range_min: 22
+          port_range_max: 22
+
+################
+## Networking ##
+################
+
+# Create a extra port for the Virtual IP address
+  vip01_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: private_net }
+      fixed_ips:
+        - subnet_id: { get_param: private_subnet }
+
+# Create instance ports that have an internal IP and the Virtual IP
+  instance01_port:
+    type: OS::Neutron::Port
+    properties:
+      admin_state_up: true
+      network_id: { get_param: private_net }
+      allowed_address_pairs:
+        - ip_address: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+      security_groups:
+        - { get_resource: sec_group_vrrp }
+        - { get_param: sec_group }
+
+  instance02_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: private_net }
+      allowed_address_pairs:
+        - ip_address: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+      security_groups:
+        - { get_resource: sec_group_vrrp }
+        - { get_param: sec_group }
+
+  floating_ip01:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: floating_net }
+      port_id: { get_resource: vip01_port }
+
+
+###############
+## Instances ##
+###############
+
+  instance01:
+    type: OS::Nova::Server
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: VRRP_servers_basename}, '01']]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks:
+        - port: { get_resource: instance01_port }
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            apt-get update
+            apt install keepalived haproxy rsyslog tcpdump -y
+            echo "
+            vrrp_sync_group VG_1 {
+                 group {
+                    INTERN
+                 }
+            }
+            
+            }
+            
+            vrrp_instance INTERN {
+                interface eth0
+                virtual_router_id 99
+                state EQUAL
+                advert_int 1
+                smtp_alert
+            
+                authentication {
+                    auth_type PASS
+                    auth_pass f4cbe02aeec63002eaf3580
+                }
+            
+                virtual_ipaddress {
+                    $vip/32
+                }
+            }
+            
+            " >> /etc/keepalived/keepalived.conf
+            service keepalived restart
+          params:
+            $vip: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+
+#         get_file: user_data_lb.sh
+
+  instance02:
+    type: OS::Nova::Server
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: VRRP_servers_basename}, '02']]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks:
+        - port: { get_resource: instance02_port } 
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            apt-get update
+            apt install keepalived haproxy rsyslog tcpdump -y
+            echo "
+            vrrp_sync_group VG_1 {
+                 group {
+                    INTERN
+                 }
+            }
+            
+            }
+            
+            vrrp_instance INTERN {
+                interface eth0
+                virtual_router_id 99
+                state EQUAL
+                advert_int 1
+                smtp_alert
+            
+                authentication {
+                    auth_type PASS
+                    auth_pass f4cbe02aeec63002eaf3580
+                }
+            
+                virtual_ipaddress {
+                    $vip/32
+                }
+            }
+            
+            " >> /etc/keepalived/keepalived.conf
+            service keepalived restart
+          params:
+            $vip: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+
+#############
+## Outputs ##
+#############
+
+outputs:
+  VIP_Internal_ip:
+    value: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+    description: Internal Virtual IP used in the keepalived config
+  VIP_Floating_ip:
+    value: { get_attr: [floating_ip01, floating_ip_address]}
+    description: The Floating IP attached to the internal ip port
+
