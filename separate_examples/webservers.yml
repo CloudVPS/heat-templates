@@ -32,7 +32,7 @@ parameters:
     type: string
     label: SSH key name
     description: Name or ID of existing SSH key
-    default: 
+    default:
 
   image:
     type: string
@@ -83,14 +83,12 @@ resources:
           user_data:
             str_replace:
               template: |
-                #! /bin/sh -v
-                apt-get update
-                apt-get install apache2 -y
-                service apache2 start
-                echo $hostname >> /var/www/html/index.html
+                  #! /bin/sh -v
+                  apt-get update
+                  apt-get install apache2 -y
+                  hostname >> /var/www/html/index.html 
               params:
-                $hostname: '%index%'
-
+                item: value
 #############
 ## Outputs ##
 #############
