@@ -19,13 +19,13 @@ parameters:
     type: string
     label:
     description: Name of private network to be created
-    default: private-net01
+    default: private-net
 
   private_subnet_name: 
     type: string
     label: 
     description: Name of private subnet
-    default: private-subnet01
+    default: private-subnet
 
   private_net_cidr:
     type: string
