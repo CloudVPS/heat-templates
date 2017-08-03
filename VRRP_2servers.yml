@@ -1,7 +1,15 @@
+# Heat template to Create 2 instances with a additional port for VRRP in a existing internal network.
+# Use as: openstack stack create -t VRRP_2instances.yml stackname
+# 
+# Author: Cees Moerkerken, http://virtu-on.nl/
+# Copyright (C) 2017 Cees Moerkerken (CloudVPS Heat templates)
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
 heat_template_version: '2015-04-30'
 
 description: Create 2 instances with a additional port for VRRP in a existing internal network.
-## Use as: openstack stack create -t VRRP_2instances.yml stackname
 
 ################
 ## Parameters ##
@@ -102,7 +110,7 @@ resources:
       fixed_ips:
         - subnet_id: { get_param: private_subnet }
 
-# Create instance ports that have an internal IP and the Virtual IP
+# Create instance ports that have an internal IP and are allowed to use the Virtual IP
   instance01_port:
     type: OS::Neutron::Port
     properties:
@@ -124,11 +132,42 @@ resources:
         - { get_resource: sec_group_vrrp }
         - { get_param: sec_group }
 
-  floating_ip01:
-    type: OS::Neutron::FloatingIP
+# Assign a floating ip
+#  floating_ip01:
+#    type: OS::Neutron::FloatingIP
+#    properties:
+#      floating_network: { get_param: floating_net }
+#      port_id: { get_resource: vip01_port }
+
+  floating_ip_pool:
+    type: OS::ContrailV2::FloatingIpPool
     properties:
-      floating_network: { get_param: floating_net }
-      port_id: { get_resource: vip01_port }
+      virtual_network: { get_param: floating_net }
+
+
+# associate the vip to the instances and to the vip port
+  floating_ip01_assoc:
+    type: OS::ContrailV2::FloatingIp
+#    depends_on: [ floating_ip01 ]
+    properties:
+#      floating_ip_address: { get_resource: floating_ip01 }
+      virtual_machine_interface_refs: [ {get_resource: instance01_port}, {get_resource: instance02_port}, {get_resource: vip01_port}]
+      floating_ip_pool: {get_resource: floating_ip_pool}
+
+
+
+#  floating_ip01_assoc_inst01:
+#    type: OS::Neutron::FloatingIPAssociation
+#    properties:
+#      floatingip_id: { get_resource: floating_ip01 }
+#      port_id: { get_resource: instance01_port }
+#
+#  floating_ip01_assoc_inst02:
+#    type: OS::Neutron::FloatingIPAssociation
+#    properties:
+#      floatingip_id: { get_resource: floating_ip01 }
+#      port_id: { get_resource: instance02_port }
+
 
 
 ###############
@@ -241,7 +280,7 @@ outputs:
   VIP_Internal_ip:
     value: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
     description: Internal Virtual IP used in the keepalived config
-  VIP_Floating_ip:
-    value: { get_attr: [floating_ip01, floating_ip_address]}
-    description: The Floating IP attached to the internal ip port
+#  VIP_Floating_ip:
+#    value: { get_attr: [floating_ip01, floating_ip_address]}
+#    description: The Floating IP attached to the internal ip port
 

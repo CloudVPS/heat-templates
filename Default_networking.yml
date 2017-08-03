@@ -1,8 +1,15 @@
+# Heat template to create a basic internal network, router and a allow-all securitygroup.
+# Use as: openstack stack create -t webservers.yml stackname
+# 
+# Author: Cees Moerkerken, http://virtu-on.nl/
+# Copyright (C) 2017 Cees Moerkerken (CloudVPS Heat templates)
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
 heat_template_version: 2016-04-08
 
-description: Create a basic internal network, router and a allowall securitygroup.
-## Use as: openstack stack create -t LBaaS.yml stackname
-## WIP: Needs to have ports added for the security group
+description: Create a basic internal network, router and a allow-all securitygroup.
 
 ################
 ## Parameters ##
@@ -11,38 +18,39 @@ description: Create a basic internal network, router and a allowall securitygrou
 parameters:
   public_net: 
     type: string
-    label: 
+    label: Public Network
     description: ID or name of public network for which floating IP addresses will be allocated
     default: floating
 
   private_net_name:
     type: string
-    label:
+    label: Private network name
     description: Name of private network to be created
     default: private-net
 
   private_subnet_name: 
     type: string
-    label: 
+    label: Pivate subnet name
     description: Name of private subnet
     default: private-subnet
 
   private_net_cidr:
     type: string
-    label:
+    label: Network CIDR
     description: Private network address (CIDR notation)
     default: 10.0.0.0/24
 
   private_net_gateway:
     type: string
-    label:
+    label: Gateway
     description: Private network gateway address
     default: 10.0.0.1
 
   security_group_name:
-    default: default-allow-all
-    description: Name of the security group for the loadbalancer
     type: string
+    label: Security Group name
+    description: Name of the security group for the loadbalancer
+    default: default-allow-all
 
 
 resources:

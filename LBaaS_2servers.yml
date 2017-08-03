@@ -1,8 +1,15 @@
+# Heat template to Create a LBaaS Loadbalancer for existing servers in a internal network.
+# Use as: openstack stack create -t LBaaS_2servers.yml <stackname>
+# 
+# Author: Cees Moerkerken, http://virtu-on.nl/
+# Copyright (C) 2017 Cees Moerkerken (CloudVPS Heat templates)
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
 heat_template_version: 2016-04-08
 
 description: Create a LBaaS Loadbalancer for existing servers in a internal network.
-## Use as: openstack stack create -t LBaaS.yml stackname
-## WIP: Needs to have ports added for the security group
 
 ################
 ## Parameters ##
