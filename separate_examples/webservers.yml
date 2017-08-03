@@ -32,7 +32,7 @@ parameters:
     type: string
     label: SSH key name
     description: Name or ID of existing SSH key
-    default: cees
+    default: 
 
   image:
     type: string
