@@ -1,9 +1,18 @@
+## WIP: Needs to have ports attached to the LB for the security group to work
+## WIP: %index% does not work, use LBaaS_2servers.yml instead.
+# 
+# Heat template to Create a LBaaS Loadbalancer for existing servers in a internal network.
+# Use as: openstack stack create -t LBaaS.yml <stackname>
+# 
+# Author: Cees Moerkerken, http://virtu-on.nl/
+# Copyright (C) 2017 Cees Moerkerken (CloudVPS Heat templates)
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
 heat_template_version: 2016-04-08
 
 description: Create a LBaaS Loadbalancer for existing servers in a internal network.
-## Use as: openstack stack create -t LBaaS.yml -e LBaaS_env.yml stackname
-## WIP: Needs to have ports added for the security group
-## %index% does not work!
 
 ################
 ## Parameters ##
@@ -54,23 +63,10 @@ parameters:
     description: Name of private network
     default: private-subnet
 
-#  security_group_name:
-#    default: default
-#    description: Name of the security group for the loadbalancer
-#    type: string
-
-#resource_registry:
-#  My::Cluster::PoolMembers:
-#    parameters:
-#    resources:
-#
-#      resource_def:
-#        type: OS::Neutron::LBaaS::PoolMember
-#        properties:
-#          pool: { get_resource: pool }
-#          address: { get_param: [internal_server_ips, {get_param: index}] }
-#          protocol_port: { get_param: internal_port }
-#          subnet: { get_param: private_subnet }
+  security_group_name:
+    default: default-allow-all
+    description: Name of the security group for the loadbalancer
+    type: string
 
 
 resources:
@@ -106,6 +102,7 @@ resources:
         type: OS::Neutron::LBaaS::PoolMember
         properties:
           pool: { get_resource: pool }
+# We need a good way to refer to the correct ips
           address: { get_param: internal_server_ips, "%index%" }
           protocol_port: { get_param: internal_port }
           subnet: { get_param: private_subnet }

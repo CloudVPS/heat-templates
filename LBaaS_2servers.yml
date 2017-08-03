@@ -1,5 +1,9 @@
+## WIP: Needs to have ports attached to the LB for the security group to work
+# 
 # Heat template to Create a LBaaS Loadbalancer for existing servers in a internal network.
 # Use as: openstack stack create -t LBaaS_2servers.yml <stackname>
+# 
+# Keep in mind that the loadbalancer will use the default security group!
 # 
 # Author: Cees Moerkerken, http://virtu-on.nl/
 # Copyright (C) 2017 Cees Moerkerken (CloudVPS Heat templates)
@@ -58,29 +62,22 @@ parameters:
     description: ID or name of public network for which floating IP addresses will be allocated
     default: floating
 
+  private_net:
+    type: string
+    label: Network name
+    description: Name of existing network to be used
+    default: private-net
+
   private_subnet: 
     type: string
-    label: 
+    label: Pivate subnet name
     description: Name of private network
     default: private-subnet
 
-#  security_group_name:
-#    default: default
-#    description: Name of the security group for the loadbalancer
-#    type: string
-
-#resource_registry:
-#  My::Cluster::PoolMembers:
-#    parameters:
-#    resources:
-#
-#      resource_def:
-#        type: OS::Neutron::LBaaS::PoolMember
-#        properties:
-#          pool: { get_resource: pool }
-#          address: { get_param: [internal_server_ips, {get_param: index}] }
-#          protocol_port: { get_param: internal_port }
-#          subnet: { get_param: private_subnet }
+  security_group_name:
+    default: default-allow-all
+    description: Name of the security group for the loadbalancer
+    type: string
 
 
 resources:
@@ -89,9 +86,21 @@ resources:
 ## LBaaS ###
 ############
 
+# Create a extra port for the Virtual IP address of the loadbalancer with the correct security group
+# This port can't be attached to de loadbalancer, and is therefore still usesless
+#  vip01_port:
+#    type: OS::Neutron::Port
+#    properties:
+#      network_id: { get_param: private_net }
+#      fixed_ips:
+#        - subnet_id: { get_param: private_subnet }
+#      security_groups:
+#        - { get_param: security_group_name }
+
   loadbalancer:
     type: OS::Neutron::LBaaS::LoadBalancer
     properties:
+#      vip_address:  { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
       vip_subnet: { get_param: private_subnet }
 
   listener:
@@ -151,13 +160,10 @@ outputs:
   Pool_id:
     value: { get_attr: [ pool ] }
     description: GUID of the pool associated with this loadbalancer
-  LB_Floating_ip_id:
-    value: { get_attr: [ floating_ip ] }
-    description: GUID of the floating ip
-#  LB_Floating_ip:
-#    value: { get_attr: [ floating_ip, floating_ip ] }
-#    description: The floating ip
-#  Appservers_ip:
-#    description: "ip addresses of internal servers"
-#    value: { get_attr: [ internal_port, instance_ip]}
+#  VIP_Floating_ip:
+#    value: { get_attr: [floating_ip01, floating_ip_address]}
+#    description: The Floating IP attached to the internal ip port
+  LB_Floating_ip:
+    value: { get_attr: [ floating_ip, floating_ip_address ] }
+    description: The floating ip
 
