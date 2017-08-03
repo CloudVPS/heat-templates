@@ -40,7 +40,7 @@ parameters:
     default: 10.0.0.1
 
   security_group_name:
-    default: default
+    default: default-allow-all
     description: Name of the security group for the loadbalancer
     type: string
 
@@ -81,7 +81,7 @@ resources:
       router_id: { get_resource: router }
       subnet_id: { get_resource: private_subnet }
 
-  sec_group_internal:
+  sec_group_allow_all:
     type: OS::Neutron::SecurityGroup
     properties:
       name:
