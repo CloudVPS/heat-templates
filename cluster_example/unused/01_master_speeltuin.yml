@@ -1,0 +1,115 @@
+heat_template_version: 2015-10-15
+
+description: Openstack client speeltuin.
+
+parameters:
+
+  project:
+    type: string
+  key_name:
+    type: string
+  flavor:
+    type: string
+  lbflavor:
+    type: string
+  image:
+    type: string
+  app_port:
+    type: string
+  lb_port:
+    type: string
+  public_net:
+    type: string
+  private_net_name:
+    type: string
+  private_net_cidr:
+    type: string
+  private_net_gateway:
+    type: string
+  private_net_pool_start:
+    type: string
+  private_net_pool_end:
+    type: string
+
+
+resources:
+
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: 
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: private_net_name }]]
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      dns_nameservers: [{ get_param: private_net_gateway }]
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      admin_state_up: true
+#      ha: true #Neutron restricts usage of this property to administrative users only
+#      distributed: true #Neutron restricts usage of this property to administrative users only
+      external_gateway_info:
+        network: { get_param: public_net }
+
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet_id: { get_resource: private_subnet }
+
+  sec_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+#      name: { get_param:  }
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-external-allow-all']]
+      rules:
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: ingress
+
+################
+## Instances ###
+################
+
+  speelserver:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: 5
+      resource_def:
+        type: My::Cluster::InstanceFloat
+        properties:
+          name:
+            list_join: ['-', [ {get_param: 'OS::stack_name'}, 'speeltoestel']]
+          key_name: { get_param: key_name }
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          private_net: { get_resource: private_net }
+          private_subnet: { get_resource: private_subnet }
+#          sec_group: { get_resource: sec_group }
+          sec_group: default
+          public_net: { get_param: public_net }
+
+
+#############
+## Outputs ##
+#############
+
+outputs:
+  testserver_Float_ip:
+    value: { get_attr: [ speelserver, floating_ip ] }

@@ -1,0 +1,68 @@
+heat_template_version: 2013-05-23
+
+#description: Create appservers with apache and php
+
+parameters:
+  name:
+    type: string
+  key_name:
+    type: string
+  image:
+    type: string
+  flavor:
+    type: string
+  private_net:
+    type: string
+  sec_group:
+    type: string
+  app_port:
+    type: string
+  pool:
+    type: string
+  private_subnet:
+    type: string
+  user_data:
+    type: string
+  availability_zones:
+    type: comma_delimited_list
+  index:
+    type: string
+
+resources:
+
+################
+## Instances ###
+################
+
+  instance:
+    type: OS::Nova::Server
+    properties:
+      name: { get_param: name }
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks: [{ network: { get_param: private_net }}]
+      security_groups: [{ get_param: sec_group }]
+      user_data_format: RAW
+      user_data: { get_param: user_data }
+      availability_zone: { get_param: [ availability_zones, get_param: index ] }
+
+  pool_member_appserver:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      pool: { get_param: pool }
+      address: { get_attr: [ instance, first_address ]}
+      protocol_port: { get_param: app_port }
+      subnet: { get_param: private_subnet }
+
+outputs:
+  instance_resource_id:
+    description: The id of each deployed instance
+    value: { get_resource: instance }
+#  instance_cinder_volume_id:
+#    description: The id of the cinder volume created for this instance
+#    value: { get_resource: instance_volume0 }
+  instance_ip:
+    description: "ip address"
+    value: { get_attr: [ instance, first_address ]}
+

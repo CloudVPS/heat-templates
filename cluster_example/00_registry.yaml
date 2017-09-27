@@ -1,0 +1,15 @@
+resource_registry:
+  My::Cluster::Network:                ./02_network.yaml
+  My::Cluster::Loadbalancer:           ./03_lbaas.yaml
+  My::Cluster::InstancePool:           ./04_instance_pool.yaml
+  My::Cluster::InstancePoolVol:        ./04_instance_pool_vol.yaml
+  My::Cluster::InstanceInternal:       ./04_instance_internal.yaml
+  My::Cluster::InstanceInternalVol:    ./04_instance_internal_vol.yaml
+  My::Cluster::InstanceInternalVolVip: ./04_instance_internal_vol_vip.yaml
+  My::Cluster::InstanceFloat:          ./04_instance_float.yaml
+
+#  My::Cluster::Sec_group:            { get_resource: sec_group }
+#  My::Net:private_net:            { get_resource: private_net }
+
+#  My::Tenant::Network:                                         ../osp_lbaasv2_heat_demo/my_tenant_network.yaml
+
