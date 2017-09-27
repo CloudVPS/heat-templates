@@ -1,11 +1,32 @@
 # heat-templates
 The heat-templates repository contains various examples of heat templates that will work with the CloudVPS OpenStack cloud.
 
-All heat templates here are examples, and must be treated as such. 
-There will be default values defined in order to make all templates work out-of-the box, that are not usable for production purposes.
+All heat templates here are **examples**, and must be treated as such. 
+There will be **default values defined** in order to make all templates work out-of-the box, that are **not usable for production** purposes without customisation.
 
 ## separate_examples
-webservers.yml: Add servers to existing network and install apache2
+**Default_networking.yml**: Create a basic internal network, router and a allow-all securitygroup.
+
+---
+**webservers.yml**: Add servers to existing network and install apache2
+
+---
+**LBaaS.yml**: Create a LBaaS Loadbalancer for existing servers in a internal network.  
+
+*WIP: Needs to have ports attached to the LB for the security group to work*
+
+*WIP: %index% does not work, use LBaaS_2servers.yml instead.*
+
+---
+**LBaaS_2servers.yml**: Create a LBaaS Loadbalancer for existing servers in a internal network.
+
+*WIP: Needs to have ports attached to the LB for the security group to work*
+
+---
+**VRRP_2servers.yml**: Create 2 instances with a additional port for VRRP in a existing internal network.
+
+Use as: ```openstack stack create -t VRRP_2instances.yml stackname```
+
 
 ## LBaaS_with_env_file
 Examples to create LBaaS with a environment file.
