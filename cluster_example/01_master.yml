@@ -7,11 +7,11 @@ parameters:
   project:
     type: string
     label: Project
-    default: 8fdc053da26b47ef9b679e49fe447830
+    default: 
     description: ID of project to create resources in
   key_name:
     type: string
-    default: jumphost
+    default: 
     description: Name of keypair to assign to servers
 
   image:

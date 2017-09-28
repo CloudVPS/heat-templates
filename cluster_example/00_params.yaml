@@ -1,7 +1,7 @@
 parameters:
 
-  project: 8fdc053da26b47ef9b679e49fe447830
-  key_name: jumphost
+  project: 
+  key_name: 
 
   image: "Ubuntu 16.04 (LTS)"
 
