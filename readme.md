@@ -49,8 +49,21 @@ Use as:
 More detailed examples to create a keepalived cluster with LBaaS or two or more keepalived servers in front of 4 or more appservers.
 
 Also includes internal dbservers with a keepalived ip and installs wordpress.
+This is for demo, getting started or P.O.C. purposes only. Failover does work however (sql) replication is not set up.
 
-Use as: 
 
-```openstack stack create -t 01_master.yml -e 00_registry.yaml stackname```
+When using horizon use by opening 
+ - 01_master_github.yml
+ - 00_registry_github.yaml
+
+You could also link to the raw github files without downloading.
+
+
+When using the OpenStack client (see our (https://www.cloudvps.nl/openstack/openstack-getting-started-command-line) "getting started guide") ):
+ - Edit the 01_master.yml to include your ssh key name.
+ - And use as:
+
+```openstack stack create -t 01_master.yml -e 00_registry_local.yaml stackname```
+
+
 

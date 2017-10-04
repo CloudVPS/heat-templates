@@ -1,0 +1,461 @@
+heat_template_version: 2015-10-15
+
+description: A webcluster example in one template. (there is no replication configured, only failover)
+
+parameters:
+
+  key_name:
+    type: string
+    default: 
+    description: Name of keypair to assign to servers
+
+  image:
+    type: string
+    default: "Ubuntu 16.04 (LTS)"
+    description: Image used for all servers
+
+  lbflavor:
+    type: string
+    default: "Standard 1GB"
+    description: Flavor used for lb servers
+  lb_count:
+    type: string
+    default: 0
+    description: lbserver is not needed if you use lbaas, default count=0
+  lb_port_http:
+    type: string
+    default: 80
+    description: Port used by the load balancer facing external
+#  lb_port_https:
+#    type: string
+#    default: 443
+#    description: Port used by the load balancer facing external
+
+  appflavor:
+    type: string
+    default: "Standard 1GB"
+    description: Flavor used for app servers
+  app_count:
+    type: string
+    default: 2
+  app_port_http:
+    type: string
+    default: 80
+    description: Port used by the appservers (webservers) internal
+#  app_port_https:
+#    type: string
+#    default: 443
+#    description: Port used by the appservers (webservers) internal
+
+  dbflavor:
+    type: string
+    default: "Standard 1GB"
+    description: Flavor used for lb servers
+  db_count:
+    type: string
+    default: 2
+  db_vip:
+    type: string
+    default: "10.0.0.254"
+    description: IP used by keepalived on dbservers and wordpress as MySQL VIP (must match userdata)
+
+  deployflavor:
+    type: string
+    default: "Standard 1GB"
+    description: Flavor used for deploy/bastion server
+
+  master_availability_zones:
+    type: comma_delimited_list
+    default: ["AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1",]
+
+  public_net:
+    type: string
+    default: floating
+    description: ID or name of public network for which floating IP addresses will be allocated
+  private_net_name:
+    type: string
+    default: net-private-01
+    description: Name of private network to be created
+  private_net_cidr:
+    type: string
+    default: 10.0.0.0/24
+    description: Private network address (CIDR notation)
+  private_net_gateway:
+    type: string
+    default: 10.0.0.1
+    description: Private network gateway address
+  private_net_pool_start:
+    type: string
+    default: 10.0.0.10
+    description: Start of private network IP address allocation pool
+  private_net_pool_end:
+    type: string
+    default: 10.0.0.250
+    description: End of private network IP address allocation pool
+
+
+
+################
+## Networking ##
+################
+
+resources:
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: 
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: private_net_name }]]
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      dns_nameservers: [{ get_param: private_net_gateway }]
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      admin_state_up: true
+#      ha: true #All routers are deployed HA with OpenContrail
+#      distributed: true #All routers are distributed with OpenContrail
+      external_gateway_info:
+        network: { get_param: public_net }
+
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet_id: { get_resource: private_subnet }
+
+  sec_group_external:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-external']]
+      rules:
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: egress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: { get_param: app_port_http }
+          port_range_max: { get_param: app_port_http }
+#        - remote_ip_prefix: 0.0.0.0/0
+#          protocol: tcp
+#          direction: ingress
+#          port_range_min: { get_param: app_port_https }
+#          port_range_max: { get_param: app_port_https }
+        - remote_ip_prefix: 10.0.0.0/8
+          protocol: tcp
+          direction: ingress
+          port_range_min: 22
+          port_range_max: 22
+        - remote_ip_prefix: 10.0.0.0/8
+          protocol: tcp
+          direction: egress
+          port_range_min: 22
+          port_range_max: 22
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: egress
+#ICMP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: egress
+
+  sec_group_internal:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-internal-allow-all']]
+      rules:
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: egress
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: egress
+#ICMP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: egress
+
+
+
+############
+## LBaaS ###
+############
+#not needed if you use lbserver instances
+
+  loadbalancer:
+    type: My::Cluster::Loadbalancer
+    properties:
+      app_port_http: { get_param: app_port_http }
+#      app_port_https: { get_param: app_port_https }
+      lb_port_http: { get_param: lb_port_http }
+#      lb_port_https: { get_param: lb_port_https }
+      public_net: { get_param: public_net }
+      private_net_cidr: { get_param: private_net_cidr }
+      subnet_id: { get_resource: private_subnet }
+
+################
+## Instances ###
+################
+#lbserver not needed if you use lbaas, default count=0
+
+  lbservers:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: lb_count }
+      resource_def:
+          type: My::Cluster::InstanceInternal
+          properties:
+            name:
+              list_join: ['-', [ {get_param: 'OS::stack_name'}, 'lb%index%']]
+            key_name: { get_param: key_name }
+            image: { get_param: image }
+            flavor: { get_param: lbflavor }
+            private_net: { get_resource: private_net }
+            sec_group: { get_resource: sec_group_external }
+            private_subnet: { get_resource: private_subnet }
+            user_data: { get_file: 'https://raw.githubusercontent.com/CloudVPS/heat-templates/master/cluster_example/user_data_lb.sh' }
+            availability_zones: { get_param: master_availability_zones }
+            index: '%index%'
+
+
+  dbserver_vip_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - ip_address: { get_param: db_vip }
+
+  dbservers:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: db_count }
+      resource_def:
+          type: My::Cluster::InstanceInternalVolVip
+          properties:
+            name:
+              list_join: ['-', [ {get_param: 'OS::stack_name'}, 'db%index%']]
+            key_name: { get_param: key_name }
+            image: { get_param: image }
+            flavor: { get_param: dbflavor }
+            private_net: { get_resource: private_net }
+            sec_group: { get_resource: sec_group_internal }
+            user_data: { get_file: 'https://raw.githubusercontent.com/CloudVPS/heat-templates/master/cluster_example/user_data_dbserver.sh' }
+            private_subnet: { get_resource: private_subnet }
+            availability_zones: { get_param: master_availability_zones }
+            index: '%index%'
+            allowed_address_pair: { get_param: db_vip }
+ 
+
+  appservers:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: app_count }
+      resource_def:
+          type: My::Cluster::InstancePool
+          properties:
+            name: 
+              list_join: ['-', [ {get_param: 'OS::stack_name'}, 'app%index%']]
+            key_name: { get_param: key_name }
+            image: { get_param: image }
+            flavor: { get_param: appflavor }
+            private_net: { get_resource: private_net }
+            sec_group: { get_resource: sec_group_internal }
+            app_port: { get_param: app_port_http }
+            pool: { get_attr: [ loadbalancer, pool_id]}
+            private_subnet: { get_resource: private_subnet }
+            availability_zones: { get_param: master_availability_zones }
+            index: '%index%'
+            user_data:
+              str_replace:
+                template: |
+                  #! /bin/sh -v
+                  apt-get update
+                  sudo apt install -y nginx php php-mysql php-curl php-gd php-mcrypt mysql-client
+                  
+                  sudo mkdir -p $WP_PATH/public $WP_PATH/logs
+                  sudo tee /etc/nginx/sites-available/$WP_DOMAIN <<EOF
+                  server {
+                    listen 80;
+                    server_name $WP_DOMAIN www.$WP_DOMAIN _;
+                  
+                    root $WP_PATH/public;
+                    index index.php;
+                  
+                    access_log $WP_PATH/logs/access.log;
+                    error_log $WP_PATH/logs/error.log;
+                  
+                    location / {
+                      try_files \$uri \$uri/ /index.php?\$args;
+                    }
+                  
+                    location ~ \.php\$ {
+                      include snippets/fastcgi-php.conf;
+                      fastcgi_pass unix:/run/php/php7.0-fpm.sock;
+                    }
+                  }
+                  EOF
+                  sudo ln -s /etc/nginx/sites-available/$WP_DOMAIN /etc/nginx/sites-enabled/$WP_DOMAIN
+                  #sudo rm /etc/nginx/sites-enabled/default
+                  sudo systemctl restart nginx
+                  
+                  
+                  ### START The WP installation ###
+                  
+                  sudo rm -rf $WP_PATH/public/ # !!!
+                  sudo mkdir -p $WP_PATH/public/
+                  sudo chown -R $USER $WP_PATH/public/
+                  cd $WP_PATH/public/
+                  
+                  wget https://wordpress.org/latest.tar.gz
+                  tar xf latest.tar.gz --strip-components=1
+                  tar --strip-components=1 -zxvf latest.tar.gz -C $WP_PATH/public
+                  rm latest.tar.gz
+                  
+                  mv wp-config-sample.php wp-config.php
+                  sed -i s/database_name_here/$WP_DB_NAME/ wp-config.php
+                  sed -i s/username_here/$WP_DB_USERNAME/ wp-config.php
+                  sed -i s/password_here/$WP_DB_PASSWORD/ wp-config.php
+                  sed -i s/localhost/$WP_DB_HOST/ wp-config.php
+                  echo "define('FS_METHOD', 'direct');" >> wp-config.php
+                  
+                  sudo chown -R www-data:www-data $WP_PATH/public/
+                  
+                  echo "waiting for databases"
+                  until mysql -u $WP_DB_USERNAME -p$WP_DB_PASSWORD -h $WP_DB_HOST -e "show databases"; do sleep 2; done
+                  echo "database found"
+                  
+                  
+                  curl -H 'Host: $WP_DOMAIN' "http://127.0.0.1/wp-admin/install.php?step=2" \
+                    --data-urlencode "weblog_title=$WP_DOMAIN"\
+                    --data-urlencode "user_name=$WP_ADMIN_USERNAME" \
+                    --data-urlencode "admin_email=$WP_ADMIN_EMAIL" \
+                    --data-urlencode "admin_password=$WP_ADMIN_PASSWORD" \
+                    --data-urlencode "admin_password2=$WP_ADMIN_PASSWORD" \
+                    --data-urlencode "pw_weak=1"
+                params:
+                  $WP_DOMAIN: "kinderboekenwebshop.nl"
+                  $WP_ADMIN_USERNAME: "admin"
+                  $WP_ADMIN_PASSWORD: "admin"
+                  $WP_ADMIN_EMAIL: "no@spam.org"
+                  $WP_DB_NAME: "wordpress"
+                  $WP_DB_USERNAME: "wordpress"
+                  $WP_DB_PASSWORD: "wordpress"
+                  $WP_DB_HOST: { get_param: db_vip }
+                  $WP_PATH: "/var/www/wordpress"
+                  $MYSQL_ROOT_PASSWORD: "root"
+ 
+
+
+
+  deployserver:
+    type: My::Cluster::InstanceFloat
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'deployserver']]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: deployflavor }
+      private_net: { get_resource: private_net }
+      private_subnet: { get_resource: private_subnet }
+      sec_group: { get_resource: sec_group_internal }
+      public_net: { get_param: public_net }
+      user_data: { get_file: 'https://raw.githubusercontent.com/CloudVPS/heat-templates/master/cluster_example/user_data_deploy.sh' }
+      availability_zones: { get_param: master_availability_zones }
+      index: 0
+
+
+#############
+## Outputs ##
+#############
+
+outputs:
+
+  LB_Floating_ip:
+    value: { get_attr: [ loadbalancer, floating_ip ] }
+    description: The floating ip
+  Deployserver_Float_ip:
+    value: { get_attr: [ deployserver, floating_ip ] }
+    description: The floating ip
+  Appservers_ip:
+    description: "ip addresses of appservers"
+    value: { get_attr: [ appservers, instance_ip]}
+  DBservers_ip:
+    description: "ip addresses of dbservers"
+    value: { get_attr: [ dbservers, instance_ip]}
+
+#  LB_Floating_ip_id:
+#    value: { get_attr: [ loadbalancer, floating_ip_id ] }
+#    description: GUID of the floating ip
+#  Private_network_id:
+#    value: { get_resource: private_net }
+#    description: GUID of the network created by this template
+#  Private_subnet_id:
+#    value: { get_resource: private_subnet }
+#    description: GUID of the subnet created by this template
+#  Network_router_id:
+#    value: { get_resource: router }
+#    description: GUID of the router created by this templ
+#  Loadbalancer_id:
+#    value: { get_attr: [ loadbalancer, loadbalancer_id ] }
+#    description: GUID of the loadbalancer
+#  Pool_id:
+#    value: { get_attr: [ loadbalancer, pool_id]}
+#    description: GUID of the pool associated with this loadbalancer
+
+
+
+
+
+
+#  server1_private_ip:
+#    description: IP address of server1 in private network
+#    value: { get_attr: [ server1, first_address ] }
+#  server1_public_ip:
+#    description: Floating IP address of server1 in public network
+#    value: { get_attr: [ server1_floating_ip, floating_ip_address ] }
+#  server2_private_ip:
+#    description: IP address of server2 in private network
+#    value: { get_attr: [ server2, first_address ] }
+#  server2_public_ip:
+#    description: Floating IP address of server2 in public network
+#    value: { get_attr: [ server2_floating_ip, floating_ip_address ] }
+
+
+#  lburl:
+#    value:
+#      str_replace:
+#        template: http://IP_ADDRESS:PORT
+#        params:
+#          IP_ADDRESS: { get_attr: [ floating_ip, floating_ip_address ] }
+#          PORT: { get_param: lb_port }
+#    description: >
+#      This URL is the "external" URL that can be used to access the
+#      load balancer.
