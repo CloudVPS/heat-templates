@@ -46,7 +46,7 @@ Use as:
 
 
 ## cluster_example
-More detailed examples to create a keepalived cluster with LBaaS or two or more keepalived servers in front of 4 or more appservers.
+More detailed examples to create a keepalived cluster with LBaaS or two or more keepalived servers in front of 2 or more appservers.
 
 Also includes internal dbservers with a keepalived ip and installs wordpress.
 This is for demo, getting started or P.O.C. purposes only. Failover does work however (sql) replication is not set up.
@@ -59,7 +59,7 @@ When using horizon use by opening
 You could also link to the raw github files without downloading.
 
 
-When using the OpenStack client (see our (https://www.cloudvps.nl/openstack/openstack-getting-started-command-line) "getting started guide") ):
+When using the OpenStack client, see our [getting started guide](https://www.cloudvps.nl/openstack/openstack-getting-started-command-line):
  - Edit the 01_master.yml to include your ssh key name.
  - And use as:
 
