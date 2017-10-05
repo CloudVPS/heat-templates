@@ -28,7 +28,7 @@ See our [getting started guide](https://www.cloudvps.nl/openstack/openstack-gett
 ---
 **VRRP_2servers.yml**: Create 2 instances with a additional port for VRRP in a existing internal network.
 
-Use as: ```openstack stack create -t VRRP_2instances.yml stackname```
+Use as: ```openstack stack create -t VRRP_2instances.yml <STACK_NAME>```
 
 
 ## LBaaS_with_env_file
@@ -36,7 +36,7 @@ Examples to create LBaaS with a environment file.
 
 Use as;
 
-```openstack stack create -t LBaaS.yml -e LBaaS_env.yml  stackname```
+```openstack stack create -t LBaaS.yml -e LBaaS_env.yml  <STACK_NAME>```
 
 LBaaS_resource.yaml is included by the environment file.
 
@@ -45,7 +45,7 @@ Examples to create a keepalived cluster with LBaaS or two or more keepalived ser
 
 Use as:
 
-```openstack stack create -t 01_create_cluster.yml -e 00_params.yaml -e 00_registry.yaml stackname```
+```openstack stack create -t 01_create_cluster.yml -e 00_params.yaml -e 00_registry.yaml <STACK_NAME>```
 
 
 ## cluster_example
@@ -59,7 +59,7 @@ This is for demo, getting started or P.O.C. purposes only. Failover does work ho
  - Edit the 01_master.yml to include your ssh key name.
  - And use as:
 
-```openstack stack create -t 01_master.yml -e 00_registry.yaml stackname```
+```openstack stack create -t 01_master.yaml -e 00_registry.yaml --parameter key_name=<SSH_KEY_NAME> <STACK_NAME>```
 
 
 

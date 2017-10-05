@@ -20,16 +20,16 @@ parameters:
     description: Flavor used for lb servers
   lb_count:
     type: string
-    default: 0
-    description: lbserver is not needed if you use lbaas, default count=0
+    default: 2
+    description: lbserver is not needed if you use lbaas
   lb_port_http:
     type: string
     default: 80
     description: Port used by the load balancer facing external
-#  lb_port_https:
-#    type: string
-#    default: 443
-#    description: Port used by the load balancer facing external
+  lb_floatingip:
+    type: string
+    default: 
+    description: VIP used by the load balancer facing external and failing over via keepalived script
 
   appflavor:
     type: string
@@ -166,6 +166,9 @@ resources:
 #UDP
         - remote_ip_prefix: 0.0.0.0/0
           protocol: udp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
           direction: egress
 #ICMP
         - remote_ip_prefix: 0.0.0.0/0
@@ -204,7 +207,6 @@ resources:
           direction: egress
 
 
-
 ############
 ## LBaaS ###
 ############
@@ -214,9 +216,7 @@ resources:
     type: My::Cluster::Loadbalancer
     properties:
       app_port_http: { get_param: app_port_http }
-#      app_port_https: { get_param: app_port_https }
       lb_port_http: { get_param: lb_port_http }
-#      lb_port_https: { get_param: lb_port_https }
       public_net: { get_param: public_net }
       private_net_cidr: { get_param: private_net_cidr }
       subnet_id: { get_resource: private_subnet }
@@ -224,7 +224,7 @@ resources:
 ################
 ## Instances ###
 ################
-#lbserver not needed if you use lbaas, default count=0
+#lbserver not needed if you use lbaas
 
   lbservers:
     type: OS::Heat::ResourceGroup
@@ -241,9 +241,62 @@ resources:
             private_net: { get_resource: private_net }
             sec_group: { get_resource: sec_group_external }
             private_subnet: { get_resource: private_subnet }
-            user_data: { get_file: 'user_data_lb.sh' }
             availability_zones: { get_param: master_availability_zones }
             index: '%index%'
+            user_data:
+              str_replace:
+                template: |
+                  #! /bin/sh -v
+                  echo "193.138.207.10	identity.openstack.cloudvps.com" >> /etc/hosts
+                  echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
+
+                  apt-get update
+                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode -y
+                  
+                  mkdir -p /etc/cloudvps/
+                  wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/RaymiiOrg/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
+                  chmod +x /etc/cloudvps/ha-ip-failover.py
+                  
+                  ip=$(ip a|grep -m 1 "scope global"|cut -d " " -f6|cut -d "/" -f1)
+
+                  
+                  echo '{
+                    "username": "cees_api",
+                    "password": "ang2Ue8U",
+                    "tenant_id": "422f4838817741d58956e887b1e2e25c",
+                    "floatingips": {
+                      "$FLOATINGIP": "'$ip'"
+                    } 
+                  }' > /etc/cloudvps/ha-ip-config.json
+                  
+                  echo "global_defs {
+                     router_id lb1
+                  }
+                  vrrp_sync_group VG_1 {
+                       group {
+                          INTERN
+                       }
+                  }
+
+                  
+                  vrrp_instance VI_1 {
+                      state MASTER
+                      interface eth0
+                      virtual_router_id 51
+                      priority 150
+                      advert_int 1
+                      authentication {
+                          auth_type PASS
+                          auth_pass 
+                      }
+                      notify /etc/cloudvps/ha-ip-failover.py
+                  }
+                  
+                  " >> /etc/keepalived/keepalived.conf
+                  systemctl restart keepalived
+
+                params:
+                  $FLOATINGIP: {get_param: 'lb_floatingip'}
 
 
   dbserver_vip_port:
@@ -398,12 +451,18 @@ resources:
 
 outputs:
 
-  LB_Floating_ip:
+  LBaaS_Floating_ip:
     value: { get_attr: [ loadbalancer, floating_ip ] }
-    description: The floating ip
+    description: The floating ip of the LBaaS loadbalaner
+  LB_Floating_ip:
+    value: { get_param: 'lb_floatingip' }
+    description: The floating ip of the loadbalaner servers configured in keepalived
   Deployserver_Float_ip:
     value: { get_attr: [ deployserver, floating_ip ] }
-    description: The floating ip
+    description: The floating ip of the deployserver
+  LBservers_ip:
+    description: "internal ip addresses of lb servers"
+    value: { get_attr: [ lbservers, instance_ip]}
   Appservers_ip:
     description: "ip addresses of appservers"
     value: { get_attr: [ appservers, instance_ip]}
@@ -411,51 +470,3 @@ outputs:
     description: "ip addresses of dbservers"
     value: { get_attr: [ dbservers, instance_ip]}
 
-#  LB_Floating_ip_id:
-#    value: { get_attr: [ loadbalancer, floating_ip_id ] }
-#    description: GUID of the floating ip
-#  Private_network_id:
-#    value: { get_resource: private_net }
-#    description: GUID of the network created by this template
-#  Private_subnet_id:
-#    value: { get_resource: private_subnet }
-#    description: GUID of the subnet created by this template
-#  Network_router_id:
-#    value: { get_resource: router }
-#    description: GUID of the router created by this templ
-#  Loadbalancer_id:
-#    value: { get_attr: [ loadbalancer, loadbalancer_id ] }
-#    description: GUID of the loadbalancer
-#  Pool_id:
-#    value: { get_attr: [ loadbalancer, pool_id]}
-#    description: GUID of the pool associated with this loadbalancer
-
-
-
-
-
-
-#  server1_private_ip:
-#    description: IP address of server1 in private network
-#    value: { get_attr: [ server1, first_address ] }
-#  server1_public_ip:
-#    description: Floating IP address of server1 in public network
-#    value: { get_attr: [ server1_floating_ip, floating_ip_address ] }
-#  server2_private_ip:
-#    description: IP address of server2 in private network
-#    value: { get_attr: [ server2, first_address ] }
-#  server2_public_ip:
-#    description: Floating IP address of server2 in public network
-#    value: { get_attr: [ server2_floating_ip, floating_ip_address ] }
-
-
-#  lburl:
-#    value:
-#      str_replace:
-#        template: http://IP_ADDRESS:PORT
-#        params:
-#          IP_ADDRESS: { get_attr: [ floating_ip, floating_ip_address ] }
-#          PORT: { get_param: lb_port }
-#    description: >
-#      This URL is the "external" URL that can be used to access the
-#      load balancer.
