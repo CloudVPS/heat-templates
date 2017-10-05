@@ -4,14 +4,9 @@ description: A webcluster example in one template. (there is no replication conf
 
 parameters:
 
-  project:
-    type: string
-    label: Project
-    default: 8fdc053da26b47ef9b679e49fe447830
-    description: ID of project to create resources in
   key_name:
     type: string
-    default: jumphost
+    default: 
     description: Name of keypair to assign to servers
 
   image:
@@ -105,20 +100,6 @@ parameters:
 ################
 
 resources:
-# Nested networking doesn't work in the current version of heat
-#  network:
-#    type: My::Cluster::Network
-#    properties:
-#      project: { get_param: project }
-#      app_port: { get_param: app_port_http }
-#      lb_port: { get_param: lb_port }
-#      public_net_name: { get_param: public_net }
-#      private_net_name: { get_param: private_net_name }
-#      private_net_cidr: { get_param: private_net_cidr }
-#      private_net_gateway: { get_param: private_net_gateway }
-#      private_net_pool_start: { get_param: private_net_pool_start }
-#      private_net_pool_end: { get_param: private_net_pool_end }
-
   private_net:
     type: OS::Neutron::Net
     properties:
