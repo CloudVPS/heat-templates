@@ -4,6 +4,9 @@ The heat-templates repository contains various examples of heat templates that w
 All heat templates here are **examples**, and must be treated as such. 
 There will be **default values defined** in order to make all templates work out-of-the box, that are **not usable for production** purposes without customisation.
 
+All heat templats can be used via [horizon](https://openstack.cloudvps.com) however you will find the commandline client a lot friendlier.
+See our [getting started guide](https://www.cloudvps.nl/openstack/openstack-getting-started-command-line) on how to use the commandline client.
+
 ## separate_examples
 **Default_networking.yml**: Create a basic internal network, router and a allow-all securitygroup.
 
@@ -52,18 +55,11 @@ Also includes internal dbservers with a keepalived ip and installs wordpress.
 This is for demo, getting started or P.O.C. purposes only. Failover does work however (sql) replication is not set up.
 
 
-When using horizon use by opening 
- - 01_master_github.yml
- - 00_registry_github.yaml
 
-You could also link to the raw github files without downloading.
-
-
-When using the OpenStack client, see our [getting started guide](https://www.cloudvps.nl/openstack/openstack-getting-started-command-line):
  - Edit the 01_master.yml to include your ssh key name.
  - And use as:
 
-```openstack stack create -t 01_master.yml -e 00_registry_local.yaml stackname```
+```openstack stack create -t 01_master.yml -e 00_registry.yaml stackname```
 
 
 
