@@ -42,6 +42,7 @@ resources:
       networks: [{ network: { get_param: private_net }}]
 #        - network: { get_param: private_net }
 #        - port: { get_resource: server2_port 
+      security_groups: [{ get_param: sec_group }]
       user_data_format: RAW
       user_data: { get_param: user_data }
       availability_zone: { get_param: [ availability_zones, get_param: index ] }

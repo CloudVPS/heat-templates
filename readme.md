@@ -56,10 +56,16 @@ This is for demo, getting started or P.O.C. purposes only. Failover does work ho
 
 
 
- - Edit the 01_master.yml to include your ssh key name.
- - And use as:
+Use as:
 
-```openstack stack create -t 01_master.yaml -e 00_registry.yaml --parameter key_name=<SSH_KEY_NAME> <STACK_NAME>```
+```openstack stack create -t 01_master.yaml -e 00_registry.yaml \
+--parameter lb_floatingip=<<pre registered floating ip>> \
+--parameter key_name=<<ssh key name>> \
+--parameter project_id=<<projectid that will be used by the keepalived script>> \
+--parameter api_user=<<userid that will be used by the keepalived script>> \
+--parameter api_user_pass=<<password that will be used by the keepalived script>> \
+<<STACK_NAME>>
+```
 
 
 

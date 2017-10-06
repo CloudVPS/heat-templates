@@ -4,9 +4,17 @@ description: A webcluster example in one template. (there is no replication conf
 
 parameters:
 
+  project_id:
+    type: string
+
+  api_user:
+    type: string
+
+  api_user_pass:
+    type: string
+
   key_name:
     type: string
-    default: 
     description: Name of keypair to assign to servers
 
   image:
@@ -42,10 +50,6 @@ parameters:
     type: string
     default: 80
     description: Port used by the appservers (webservers) internal
-#  app_port_https:
-#    type: string
-#    default: 443
-#    description: Port used by the appservers (webservers) internal
 
   dbflavor:
     type: string
@@ -66,7 +70,7 @@ parameters:
 
   master_availability_zones:
     type: comma_delimited_list
-    default: ["AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1",]
+    default: ["AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3",]
 
   public_net:
     type: string
@@ -121,8 +125,8 @@ resources:
     type: OS::Neutron::Router
     properties:
       admin_state_up: true
-#      ha: true #All routers are deployed HA with OpenContrail
-#      distributed: true #All routers are distributed with OpenContrail
+#      ha: true #All routers are deployed HA with OpenContrail by default
+#      distributed: true #All routers are distributed with OpenContrail by default
       external_gateway_info:
         network: { get_param: public_net }
 
@@ -148,17 +152,12 @@ resources:
           direction: ingress
           port_range_min: { get_param: app_port_http }
           port_range_max: { get_param: app_port_http }
-#        - remote_ip_prefix: 0.0.0.0/0
-#          protocol: tcp
-#          direction: ingress
-#          port_range_min: { get_param: app_port_https }
-#          port_range_max: { get_param: app_port_https }
-        - remote_ip_prefix: 10.0.0.0/8
+        - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: ingress
           port_range_min: 22
           port_range_max: 22
-        - remote_ip_prefix: 10.0.0.0/8
+        - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: egress
           port_range_min: 22
@@ -247,6 +246,7 @@ resources:
               str_replace:
                 template: |
                   #! /bin/sh -v
+                  #The OpenStack URL's don't resolve correct from openstack itself.
                   echo "193.138.207.10	identity.openstack.cloudvps.com" >> /etc/hosts
                   echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
 
@@ -259,11 +259,69 @@ resources:
                   
                   ip=$(ip a|grep -m 1 "scope global"|cut -d " " -f6|cut -d "/" -f1)
 
+                  echo "frontend http-in
+                      mode http
+                      bind 0.0.0.0:80
+                      #bind 0.0.0.0:443 ssl crt /etc/ssl/private/ no-sslv3 crt-ignore-err all strict-sni
+
+                      default_backend appservers
+                  
+                  backend appservers
+                        mode            http
+                        fullconn        40000
+                        balance         roundrobin
+                        cookie          SERVERID insert nocache indirect
+                        option          httpchk HEAD /health.php HTTP/1.1\r\nHost:\ localhost
+                        http-check      expect rstatus (2|3)[0-9][0-9]
+                  #Server list should be made dynamic, but this works for now.
+                        server          app1 10.0.0.11:80 check 
+                        server          app1 10.0.0.12:80 check
+                        server          app1 10.0.0.13:80 check
+                        server          app1 10.0.0.14:80 check
+                        server          app1 10.0.0.15:80 check
+                        server          app1 10.0.0.16:80 check
+                        server          app1 10.0.0.17:80 check
+                        server          app1 10.0.0.18:80 check
+                        server          app1 10.0.0.19:80 check
+                        server          app1 10.0.0.20:80 check
+                        server          app1 10.0.0.21:80 check
+                        server          app1 10.0.0.22:80 check
+                        server          app1 10.0.0.23:80 check
+                        server          app1 10.0.0.24:80 check
+                        server          app1 10.0.0.25:80 check
+                        server          app1 10.0.0.26:80 check
+                        server          app1 10.0.0.27:80 check
+                        server          app1 10.0.0.28:80 check
+                        server          app1 10.0.0.29:80 check
+                  
+                  frontend Statistics
+                        mode http
+                        bind 0.0.0.0:8000
+                        option contstats
+                        default_backend HAProxy-Statistics
+                  
+                  userlist UsersFor_HAProxyStatistics
+                        group admin users admin
+                        user admin insecure-password changeme
+                  
+                  backend HAProxy-Statistics
+                        mode http
+                        stats enable
+                        stats uri /stats
+                        stats refresh 10s
+                        stats show-node
+                        stats show-legends
+                        acl AuthOkay_ReadOnly http_auth(UsersFor_HAProxyStatistics)
+                        acl AuthOkay_Admin http_auth_group(UsersFor_HAProxyStatistics) admin
+                        stats http-request auth realm HAProxy-Statistics unless AuthOkay_ReadOnly
+                        stats admin if AuthOkay_Admin
+
+                  " >> /etc/haproxy/haproxy.cfg
                   
                   echo '{
-                    "username": "cees_api",
-                    "password": "ang2Ue8U",
-                    "tenant_id": "422f4838817741d58956e887b1e2e25c",
+                    "username": "$APIUSER",
+                    "password": "$APIUSERPASS",
+                    "tenant_id": "$PROJECTID",
                     "floatingips": {
                       "$FLOATINGIP": "'$ip'"
                     } 
@@ -297,6 +355,9 @@ resources:
 
                 params:
                   $FLOATINGIP: {get_param: 'lb_floatingip'}
+                  $PROJECTID: {get_param: 'project_id'}
+                  $APIUSER: {get_param: 'api_user'}
+                  $APIUSERPASS: {get_param: 'api_user_pass'}
 
 
   dbserver_vip_port:
@@ -354,6 +415,7 @@ resources:
                   sudo apt install -y nginx php php-mysql php-curl php-gd php-mcrypt mysql-client
                   
                   sudo mkdir -p $WP_PATH/public $WP_PATH/logs
+                  sudo rm /etc/nginx/sites-enabled/default
                   sudo tee /etc/nginx/sites-available/$WP_DOMAIN <<EOF
                   server {
                     listen 80;
@@ -438,7 +500,7 @@ resources:
       flavor: { get_param: deployflavor }
       private_net: { get_resource: private_net }
       private_subnet: { get_resource: private_subnet }
-      sec_group: { get_resource: sec_group_internal }
+      sec_group: { get_resource: sec_group_external }
       public_net: { get_param: public_net }
       user_data: { get_file: 'user_data_deploy.sh' }
       availability_zones: { get_param: master_availability_zones }
