@@ -72,6 +72,10 @@ parameters:
     type: comma_delimited_list
     default: ["AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3",]
 
+  sec_group_router:
+    type: comma_delimited_list
+    default: ["allow-all","allow-icmp"]
+
   public_net:
     type: string
     default: floating
@@ -99,43 +103,11 @@ parameters:
 
 
 
+resources:
+
 ################
 ## Networking ##
 ################
-
-resources:
-  private_net:
-    type: OS::Neutron::Net
-    properties:
-      name: 
-        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: private_net_name }]]
-
-  private_subnet:
-    type: OS::Neutron::Subnet
-    properties:
-      network_id: { get_resource: private_net }
-      cidr: { get_param: private_net_cidr }
-      gateway_ip: { get_param: private_net_gateway }
-      dns_nameservers: [{ get_param: private_net_gateway }]
-      allocation_pools:
-        - start: { get_param: private_net_pool_start }
-          end: { get_param: private_net_pool_end }
-
-  router:
-    type: OS::Neutron::Router
-    properties:
-      admin_state_up: true
-#      ha: true #All routers are deployed HA with OpenContrail by default
-#      distributed: true #All routers are distributed with OpenContrail by default
-      external_gateway_info:
-        network: { get_param: public_net }
-
-
-  router_interface:
-    type: OS::Neutron::RouterInterface
-    properties:
-      router_id: { get_resource: router }
-      subnet_id: { get_resource: private_subnet }
 
   sec_group_external:
     type: OS::Neutron::SecurityGroup
@@ -183,27 +155,57 @@ resources:
       name:
         list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-internal-allow-all']]
       rules:
-#TCP
+#        - remote_ip_prefix: 0.0.0.0/0
+        - direction: ingress
         - remote_ip_prefix: 0.0.0.0/0
-          protocol: tcp
-          direction: ingress
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: tcp
           direction: egress
-#UDP
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: udp
+#        - remote_ip_prefix: ::/0
+        - ethertype: IPv6
           direction: ingress
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: udp
+        - remote_ip_prefix: ::/0
           direction: egress
-#ICMP
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: icmp
-          direction: ingress
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: icmp
-          direction: egress
+          ethertype: IPv6
+
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: 
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: private_net_name }]]
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      dns_nameservers: [{ get_param: private_net_gateway }]
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      admin_state_up: true
+#      ha: true #All routers are deployed HA with OpenContrail by default
+#      distributed: true #All routers are distributed with OpenContrail by default
+      external_gateway_info:
+        network: { get_param: public_net }
+
+  router_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: private_net }
+      fixed_ips:  [{"subnet": { get_resource: private_subnet }, "ip_address": { get_param: private_net_gateway }}]
+      security_groups: { get_param: sec_group_router }
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+#      subnet_id: { get_resource: private_subnet }
+      port_id: { get_resource: router_port }
+
 
 
 ############
@@ -271,7 +273,7 @@ resources:
                         fullconn        40000
                         balance         roundrobin
                         cookie          SERVERID insert nocache indirect
-                        option          httpchk HEAD /health.php HTTP/1.1\r\nHost:\ localhost
+                        option          httpchk HEAD /status.php HTTP/1.1\r\nHost:\ localhost
                         http-check      expect rstatus (2|3)[0-9][0-9]
                   #Server list should be made dynamic, but this works for now.
                         server          app1 10.0.0.11:80 check 
@@ -475,6 +477,8 @@ resources:
                     --data-urlencode "admin_password=$WP_ADMIN_PASSWORD" \
                     --data-urlencode "admin_password2=$WP_ADMIN_PASSWORD" \
                     --data-urlencode "pw_weak=1"
+                  hostname > /var/www/wordpress/public/status.php 
+                  chown www-data:www-data /var/www/wordpress/public/status.php
                 params:
                   $WP_DOMAIN: "kinderboekenwebshop.nl"
                   $WP_ADMIN_USERNAME: "admin"
