@@ -373,6 +373,7 @@ resources:
                         stats admin if AuthOkay_Admin
 
                   " >> /etc/haproxy/haproxy.cfg
+                  systemctl restart haproxy
                   
 
                 params:
