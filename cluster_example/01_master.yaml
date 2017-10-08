@@ -265,15 +265,51 @@ resources:
 
                   apt-get update
                   apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode letsencrypt -y
-                  mkdir /etc/ssl/private/ -p
-                  letsencrypt certonly -n --agree-tos --webroot -w /etc/ssl/private/ -d kinderboekenwebshop.demo.cloudvps.com -m cees@cloudvps.com
-                  
+
                   mkdir -p /etc/cloudvps/
                   wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/RaymiiOrg/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
                   chmod +x /etc/cloudvps/ha-ip-failover.py
                   
                   ip=$(ip a|grep -m 1 "scope global"|cut -d " " -f6|cut -d "/" -f1)
 
+                  echo '{
+                    "username": "$APIUSER",
+                    "password": "$APIUSERPASS",
+                    "tenant_id": "$PROJECTID",
+                    "floatingips": {
+                      "$FLOATINGIP": "'$ip'"
+                    } 
+                  }' > /etc/cloudvps/ha-ip-config.json
+                  
+                  echo "global_defs {
+                     router_id lb1
+                  }
+                  vrrp_sync_group VG_1 {
+                       group {
+                          INTERN
+                       }
+                  }
+                  
+                  vrrp_instance VI_1 {
+                      state MASTER
+                      interface eth0
+                      virtual_router_id 51
+                      priority 150
+                      advert_int 1
+                      authentication {
+                          auth_type PASS
+                          auth_pass 
+                      }
+                      notify /etc/cloudvps/ha-ip-failover.py
+                  }
+                  
+                  " >> /etc/keepalived/keepalived.conf
+                  systemctl restart keepalived
+
+                  sleep 5
+                  mkdir /etc/ssl/private/ -p
+                  letsencrypt certonly -n --agree-tos --webroot -w /etc/ssl/private/ -d kinderboekenwebshop.demo.cloudvps.com -m cees@cloudvps.com
+                  
                   echo "frontend http-in
                       mode http
                       bind 0.0.0.0:80
@@ -286,7 +322,7 @@ resources:
                         fullconn        40000
                         balance         roundrobin
                         cookie          SERVERID insert nocache indirect
-                        option          httpchk HEAD /status.php HTTP/1.1/\r/\nHost:\ localhost
+                        option          httpchk HEAD /status.php
                         http-check      expect rstatus (2|3)[0-9][0-9]
                   #Server list should be made dynamic, but this works for now.
                         server          app11 10.0.0.11:80 check 
@@ -333,40 +369,6 @@ resources:
 
                   " >> /etc/haproxy/haproxy.cfg
                   
-                  echo '{
-                    "username": "$APIUSER",
-                    "password": "$APIUSERPASS",
-                    "tenant_id": "$PROJECTID",
-                    "floatingips": {
-                      "$FLOATINGIP": "'$ip'"
-                    } 
-                  }' > /etc/cloudvps/ha-ip-config.json
-                  
-                  echo "global_defs {
-                     router_id lb1
-                  }
-                  vrrp_sync_group VG_1 {
-                       group {
-                          INTERN
-                       }
-                  }
-
-                  
-                  vrrp_instance VI_1 {
-                      state MASTER
-                      interface eth0
-                      virtual_router_id 51
-                      priority 150
-                      advert_int 1
-                      authentication {
-                          auth_type PASS
-                          auth_pass 
-                      }
-                      notify /etc/cloudvps/ha-ip-failover.py
-                  }
-                  
-                  " >> /etc/keepalived/keepalived.conf
-                  systemctl restart keepalived
 
                 params:
                   $FLOATINGIP: {get_param: 'lb_floatingip'}
