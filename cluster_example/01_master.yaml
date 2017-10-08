@@ -127,6 +127,11 @@ resources:
         - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: ingress
+          port_range_min: 443
+          port_range_max: 443
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
           port_range_min: 22
           port_range_max: 22
         - remote_ip_prefix: 0.0.0.0/0
@@ -134,6 +139,12 @@ resources:
           direction: egress
           port_range_min: 22
           port_range_max: 22
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: 8000
+          port_range_max: 8000
+
 #UDP
         - remote_ip_prefix: 0.0.0.0/0
           protocol: udp
