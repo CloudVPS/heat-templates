@@ -264,7 +264,9 @@ resources:
                   echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
 
                   apt-get update
-                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode -y
+                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode letsencrypt -y
+                  mkdir /etc/ssl/private/ -p
+                  letsencrypt certonly -n --agree-tos --webroot -w /etc/ssl/private/ -d kinderboekenwebshop.demo.cloudvps.com -m cees@cloudvps.com
                   
                   mkdir -p /etc/cloudvps/
                   wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/RaymiiOrg/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
@@ -275,7 +277,7 @@ resources:
                   echo "frontend http-in
                       mode http
                       bind 0.0.0.0:80
-                      #bind 0.0.0.0:443 ssl crt /etc/ssl/private/ no-sslv3 crt-ignore-err all strict-sni
+                      bind 0.0.0.0:443 ssl crt /etc/ssl/private/ no-sslv3 crt-ignore-err all strict-sni
 
                       default_backend appservers
                   
@@ -284,28 +286,28 @@ resources:
                         fullconn        40000
                         balance         roundrobin
                         cookie          SERVERID insert nocache indirect
-                        option          httpchk HEAD /status.php HTTP/1.1\r\nHost:\ localhost
+                        option          httpchk HEAD /status.php HTTP/1.1/\r/\nHost:\ localhost
                         http-check      expect rstatus (2|3)[0-9][0-9]
                   #Server list should be made dynamic, but this works for now.
-                        server          app1 10.0.0.11:80 check 
-                        server          app1 10.0.0.12:80 check
-                        server          app1 10.0.0.13:80 check
-                        server          app1 10.0.0.14:80 check
-                        server          app1 10.0.0.15:80 check
-                        server          app1 10.0.0.16:80 check
-                        server          app1 10.0.0.17:80 check
-                        server          app1 10.0.0.18:80 check
-                        server          app1 10.0.0.19:80 check
-                        server          app1 10.0.0.20:80 check
-                        server          app1 10.0.0.21:80 check
-                        server          app1 10.0.0.22:80 check
-                        server          app1 10.0.0.23:80 check
-                        server          app1 10.0.0.24:80 check
-                        server          app1 10.0.0.25:80 check
-                        server          app1 10.0.0.26:80 check
-                        server          app1 10.0.0.27:80 check
-                        server          app1 10.0.0.28:80 check
-                        server          app1 10.0.0.29:80 check
+                        server          app11 10.0.0.11:80 check 
+                        server          app12 10.0.0.12:80 check
+                        server          app13 10.0.0.13:80 check
+                        server          app14 10.0.0.14:80 check
+                        server          app15 10.0.0.15:80 check
+                        server          app16 10.0.0.16:80 check
+                        server          app17 10.0.0.17:80 check
+                        server          app18 10.0.0.18:80 check
+                        server          app19 10.0.0.19:80 check
+                        server          app20 10.0.0.20:80 check
+                        server          app21 10.0.0.21:80 check
+                        server          app22 10.0.0.22:80 check
+                        server          app23 10.0.0.23:80 check
+                        server          app24 10.0.0.24:80 check
+                        server          app25 10.0.0.25:80 check
+                        server          app26 10.0.0.26:80 check
+                        server          app27 10.0.0.27:80 check
+                        server          app28 10.0.0.28:80 check
+                        server          app29 10.0.0.29:80 check
                   
                   frontend Statistics
                         mode http
