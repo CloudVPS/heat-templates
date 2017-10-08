@@ -311,12 +311,14 @@ resources:
 
                   sleep 5
                   mkdir /etc/ssl/private/ -p
-                  certbot certonly --standalone --preferred-challenges http --http-01-port 80 -d kinderboekenwebshop.demo.cloudvps.com
-                  
+                  certbot certonly --standalone --preferred-challenges http --http-01-port 80 -d kinderboekenwebshop.demo.cloudvps.com -m cees@cloudvps.com  --agree-tos -n
+                  cat /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com/privkey.pem >> /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com.pem
+                  cat /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com/cert.pem >> /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com.pem
+                  cat /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com/chain.pem >> /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com.pem
                   echo "frontend http-in
                       mode http
                       bind 0.0.0.0:80
-                      bind 0.0.0.0:443 ssl crt /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com/ no-sslv3 crt-ignore-err all strict-sni
+                      bind 0.0.0.0:443 ssl crt /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com.pem no-sslv3 crt-ignore-err all strict-sni
 
                       default_backend appservers
                   
