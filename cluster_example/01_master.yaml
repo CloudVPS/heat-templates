@@ -264,8 +264,11 @@ resources:
                   echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
 
                   apt-get update
-                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode letsencrypt -y
-
+                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode letsencrypt software-properties-common -y
+                  add-apt-repository ppa:certbot/certbot -y
+                  apt-get update
+                  apt install certbot -y
+                  
                   mkdir -p /etc/cloudvps/
                   wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/RaymiiOrg/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
                   chmod +x /etc/cloudvps/ha-ip-failover.py
@@ -308,12 +311,12 @@ resources:
 
                   sleep 5
                   mkdir /etc/ssl/private/ -p
-                  letsencrypt certonly -n --agree-tos --webroot -w /etc/ssl/private/ -d kinderboekenwebshop.demo.cloudvps.com -m cees@cloudvps.com
+                  certbot certonly --standalone --preferred-challenges http --http-01-port 80 -d kinderboekenwebshop.demo.cloudvps.com
                   
                   echo "frontend http-in
                       mode http
                       bind 0.0.0.0:80
-                      bind 0.0.0.0:443 ssl crt /etc/ssl/private/ no-sslv3 crt-ignore-err all strict-sni
+                      bind 0.0.0.0:443 ssl crt /etc/letsencrypt/live/kinderboekenwebshop.demo.cloudvps.com/ no-sslv3 crt-ignore-err all strict-sni
 
                       default_backend appservers
                   
