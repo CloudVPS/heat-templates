@@ -264,7 +264,7 @@ resources:
                   echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
 
                   apt-get update
-                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode letsencrypt software-properties-common -y
+                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode software-properties-common -y
                   add-apt-repository ppa:certbot/certbot -y
                   apt-get update
                   apt install certbot -y
