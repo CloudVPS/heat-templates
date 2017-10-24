@@ -1,5 +1,5 @@
 #! /bin/sh -v
-WP_DOMAIN="kinderboekenwebshop.nl"
+WP_DOMAIN="f1shop.demo.cloudvps.com"
 WP_ADMIN_USERNAME="admin"
 WP_ADMIN_PASSWORD="admin"
 WP_ADMIN_EMAIL="no@spam.org"

@@ -469,7 +469,7 @@ resources:
                   $PROJECTID: {get_param: 'project_id'}
                   $APIUSER: {get_param: 'api_user'}
                   $APIUSERPASS: {get_param: 'api_user_pass'}
-                  $DOMAIN: "kinderboeken.demo.cloudvps.com"
+                  $DOMAIN: "f1shop.demo.cloudvps.com"
 
 
   dbserver_vip_port:
@@ -590,7 +590,7 @@ resources:
                   hostname > /var/www/wordpress/public/status.php 
                   chown www-data:www-data /var/www/wordpress/public/status.php
                 params:
-                  $WP_DOMAIN: "kinderboekenwebshop.nl"
+                  $WP_DOMAIN: "f1shop.demo.cloudvps.com"
                   $WP_ADMIN_USERNAME: "admin"
                   $WP_ADMIN_PASSWORD: "admin"
                   $WP_ADMIN_EMAIL: "no@spam.org"
