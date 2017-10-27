@@ -1,0 +1,158 @@
+# Heat template to create a network and pfSense instance
+# with correct allowed address pairs for VPN routing
+# Use as: openstack stack create -t pfSense_example/pfSense.yml stackname
+# 
+# Author: Cees Moerkerken, <http://virtu-on.nl>
+# Author: Remy van Elst <https://raymii.org>
+# Copyright (C) 2017 CloudVPS
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
+heat_template_version: 2016-04-08
+
+description: Creates an internal network and subnet, pfsense instance and set correct allowed_address_pairs VPN routing by the pfSense.
+
+################
+## Parameters ##
+################
+
+parameters:
+  private_net_name:
+    type: string
+    label: Private network name
+    description: Name of private network to be created
+    default: pfsense-private-net
+
+  private_subnet_name: 
+    type: string
+    label: Pivate subnet name
+    description: Name of private subnet
+    default: pfsense-private-subnet
+
+  router_name: 
+    type: string
+    label: Router name
+    description: Name of OpenStack router 
+    default: pfsense-private-router
+
+  private_net_cidr:
+    type: string
+    label: Network CIDR
+    description: Private network address (CIDR notation)
+    default: 192.168.1.1/24
+
+  gateway_ip:
+    type: string
+    label: OpenStack private network Gateway IP 
+    description: IP address of the gateway in the private network
+    default: 192.168.1.1
+
+  pfsense_ip:
+    type: string
+    label: pfSense internal IP (must not be the OpenStack gateway IP)
+    description: IP address which the pfsense will use.
+    default: 192.168.1.254
+
+  vpn_endpoint_subnets:
+    type: comma_delimited_list
+    label: CSV list of subnets the VPN will provide (will be set as static routes via the pfSense on the OpenStack router) (no spaces allowed)
+    description: subnets the VPN will provide (will be set as static routes via the pfSense on the OpenStack router)
+    default: 10.42.42.1/24,172.31.1.1/16,192.168.66.1/24
+
+  image:
+    type: string
+    label: pfsense Router Image name or UUID
+    description: pfsense image name or UUID
+    default: "9f5f8ae7-cb1c-43de-9b91-1a618254d9a3"
+
+resources:
+
+##############
+## Network ###
+##############
+
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: {get_param: private_net_name }
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: { get_param: private_subnet_name }
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: gateway_ip }
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+      host_routes:  
+        repeat:
+          for_each:
+            <%subnet%>: { get_param: vpn_endpoint_subnets }
+          template:
+            nexthop: { get_param: pfsense_ip }
+            destination: <%subnet%>
+
+
+
+
+  # router must be floating IP, not net-public.
+  router:
+    type: OS::Neutron::Router
+    properties:
+      admin_state_up: true
+      name: {get_param: router_name }
+      external_gateway_info:
+        network: "floating"
+
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet_id: { get_resource: private_subnet }
+
+  # due to a bug in neutron subnet 0.0.0.0/0
+  # doesn't work. Therefor we split the internet
+  # into two subnets, which does work.
+  pfsense_internal_port:
+    type: OS::Neutron::Port
+    properties:
+      admin_state_up: true
+      network_id: { get_resource: private_net }
+      allowed_address_pairs:
+        - ip_address: { get_param: pfsense_ip }
+        - ip_address: "1.0.0.0/1"
+        - ip_address: "128.0.0.0/1"
+      security_groups:
+        - allow-all
+      fixed_ips:
+        - ip_address: { get_param: pfsense_ip }
+
+  pfsense_external_port:
+    type: OS::Neutron::Port
+    properties:
+      admin_state_up: true
+      network_id: net-public
+      security_groups:
+        - allow-all
+
+
+##############
+## Instance ##
+##############
+
+# pfSense can run on a standard 1 but with addons like vpn or filtering
+# that becomes to slow.
+
+  pfsense_router_instance:
+      type: OS::Nova::Server
+      properties:
+        name: pfSense VPN Server
+        image: { get_param: image }
+        flavor: "Small HD 4GB"
+        networks:
+          - port: { get_resource: pfsense_external_port } 
+          - port: { get_resource: pfsense_internal_port } 
