@@ -11,7 +11,7 @@
 
 heat_template_version: 2016-04-08
 
-description: Create an internal network and subnet, pfsense instance and set correct allowed_address_pairs for routing.
+description: Creates an internal network and subnet, pfsense instance and set correct allowed_address_pairs for routing. Does not create instance in network behind pfsense.
 
 ################
 ## Parameters ##
@@ -35,6 +35,12 @@ parameters:
     label: Network CIDR
     description: Private network address (CIDR notation)
     default: 192.168.1.1/24
+
+  private_net_gateway:
+    type: string
+    label: Network Gateway and pfSense IP (pfsense default is 192.168.1.1) (must match CIDR)
+    description: IP address which the pfsense must use (gateway IP). pfSense by default uses 192.168.1.1.
+    default: 192.168.1.1
 
   image:
     type: string
@@ -64,9 +70,9 @@ resources:
       name: { get_param: private_subnet_name }
       network_id: { get_resource: private_net }
       cidr: { get_param: private_net_cidr }
-      gateway_ip: "192.168.1.1"
+      gateway_ip: { get_param: private_net_gateway }
       dns_nameservers:
-        - 192.168.1.1
+        - { get_param: private_net_gateway }
 
   # due to a bug in neutron subnet 0.0.0.0/0
   # doesn't work. Therefor we split the internet
@@ -77,7 +83,7 @@ resources:
       admin_state_up: true
       network_id: { get_resource: private_net }
       allowed_address_pairs:
-        - ip_address: "192.168.1.1"
+        - ip_address: { get_param: private_net_gateway }
         - ip_address: "1.0.0.0/1"
         - ip_address: "128.0.0.0/1"
       security_groups:
@@ -95,6 +101,9 @@ resources:
 ##############
 ## Instance ##
 ##############
+
+# pfSense can run on a standard 1 but with addons like vpn or filtering
+# that becomes to slow.
 
   pfsense_router_instance:
       type: OS::Nova::Server
