@@ -110,7 +110,7 @@ resources:
       properties:
         name: pfSense Router
         image: { get_param: image }
-        flavor: "Standard 4GB"
+        flavor: "Small HD 4GB"
         networks:
           - port: { get_resource: pfsense_external_port } 
           - port: { get_resource: pfsense_internal_port } 
