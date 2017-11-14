@@ -17,6 +17,12 @@ parameters:
     type: string
     description: Name of keypair to assign to servers
 
+  example_domain:
+    type: string
+    default: lala.demo.cloudvps.com
+    description: Domainname pointing to lb_flaotingip so certbot works
+
+
   image:
     type: string
     default: "Ubuntu 16.04 (LTS)"
@@ -264,13 +270,13 @@ resources:
                   echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
 
                   apt-get update
-                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode software-properties-common -y
+                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode software-properties-common python-pyasn1 -y
                   add-apt-repository ppa:certbot/certbot -y
                   apt-get update
                   apt install certbot -y
                   
                   mkdir -p /etc/cloudvps/
-                  wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/RaymiiOrg/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
+                  wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/CloudVPS/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
                   chmod +x /etc/cloudvps/ha-ip-failover.py
                   
                   ip=$(ip a|grep -m 1 "scope global"|cut -d " " -f6|cut -d "/" -f1)
@@ -301,7 +307,7 @@ resources:
                       advert_int 1
                       authentication {
                           auth_type PASS
-                          auth_pass 
+                          auth_pass changeme
                       }
                       notify /etc/cloudvps/ha-ip-failover.py
                   }
@@ -469,7 +475,7 @@ resources:
                   $PROJECTID: {get_param: 'project_id'}
                   $APIUSER: {get_param: 'api_user'}
                   $APIUSERPASS: {get_param: 'api_user_pass'}
-                  $DOMAIN: "f1shop.demo.cloudvps.com"
+                  $DOMAIN: {get_param: 'example_domain'}
 
 
   dbserver_vip_port:
@@ -590,7 +596,7 @@ resources:
                   hostname > /var/www/wordpress/public/status.php 
                   chown www-data:www-data /var/www/wordpress/public/status.php
                 params:
-                  $WP_DOMAIN: "f1shop.demo.cloudvps.com"
+                  $WP_DOMAIN: {get_param: 'example_domain'}
                   $WP_ADMIN_USERNAME: "admin"
                   $WP_ADMIN_PASSWORD: "admin"
                   $WP_ADMIN_EMAIL: "no@spam.org"

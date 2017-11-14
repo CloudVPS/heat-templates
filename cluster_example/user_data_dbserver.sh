@@ -13,7 +13,7 @@ MYSQL_ROOT_PASSWORD="root"
 apt-get update
 echo "mysql-server-5.7 mysql-server/root_password password $MYSQL_ROOT_PASSWORD" | sudo debconf-set-selections
 echo "mysql-server-5.7 mysql-server/root_password_again password $MYSQL_ROOT_PASSWORD" | sudo debconf-set-selections
-sudo apt install -y mysql-server keepalived haproxy rsyslog tcpdump -y
+sudo apt install -y mysql-server keepalived -y
 
 sed -i s/127.0.0.1/0.0.0.0/ /etc/mysql/mysql.conf.d/mysqld.cnf
 sudo systemctl restart mysql
@@ -25,12 +25,6 @@ GRANT ALL ON $WP_DB_NAME.* TO '$WP_DB_USERNAME'@'%';
 EOF
 
 echo "global_defs {
-   notification_email {
-          cees@cloudvps.com
-   }
-   notification_email_from lb1@test
-   smtp_server 194.60.207.37
-   smtp_connect_timeout 30
    router_id lb1
 }
 
@@ -48,7 +42,6 @@ vrrp_instance INTERN {
     state EQUAL
     advert_int 1
     smtp_alert
-    notify /usr/local/bin/keepalived-intern.sh
 
     authentication {
         auth_type PASS
