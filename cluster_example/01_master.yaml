@@ -84,6 +84,10 @@ parameters:
 
   public_net:
     type: string
+    default: net-public
+    description: ID or name of public network for direct attached ip's
+  floating_net:
+    type: string
     default: floating
     description: ID or name of public network for which floating IP addresses will be allocated
   private_net_name:
@@ -114,6 +118,8 @@ resources:
 ################
 ## Networking ##
 ################
+# Networking via resource registry does not work in the current version
+# Therefore it's done here.
 
   sec_group_external:
     type: OS::Neutron::SecurityGroup
@@ -207,7 +213,7 @@ resources:
 #      ha: true #All routers are deployed HA with OpenContrail by default
 #      distributed: true #All routers are distributed with OpenContrail by default
       external_gateway_info:
-        network: { get_param: public_net }
+        network: { get_param: floating_net }
 
   router_port:
     type: OS::Neutron::Port
@@ -235,7 +241,7 @@ resources:
     properties:
       app_port_http: { get_param: app_port_http }
       lb_port_http: { get_param: lb_port_http }
-      public_net: { get_param: public_net }
+      public_net: { get_param: floating_net }
       private_net_cidr: { get_param: private_net_cidr }
       subnet_id: { get_resource: private_subnet }
 
@@ -317,104 +323,26 @@ resources:
 
                   sleep 5
                   mkdir /etc/ssl/private/ -p
+                  
                   certbot certonly --standalone --preferred-challenges http --http-01-port 80 -d $DOMAIN -m cees@cloudvps.com  --agree-tos -n
 
-                  #Failback ssl if certbot fails
-                  echo "-----BEGIN PRIVATE KEY-----
-                  MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC259ydsb+nDZE2
-                  sDvewMR/kLP6qAPQ+ivt1XYu/EZl/82aLK9sACOhVppDJ+OhyIG0VCXHOqY2SJC1
-                  wrhjv+08FayuPBzq7O/L1dzwp2QR/YPAUyVoVN33nWH60TGjdKxgk2rRwjC+wG9Q
-                  16olZFrXR5qjfgVnVuMAlSRNU3eXhdPJRteSNjWOvEGvnseDjbOE9Ho151eNY9B7
-                  tSHTyfNYZRGd119iHnbGX/BOy9uSa29DrKuD9lX22wMa3etvcqqnFe/7MmQvFVcu
-                  11oTZHDCl7TeMcbx6FSlsnsWLx88+L5MOm1KzSpe9ryEf3ePW6d8wVysJIhczEx1
-                  tzWexldlAgMBAAECggEAFFZNkn8sFzAMAG+yCH+YmbKGQI2j9v2KGuTMQkcssLSz
-                  sLvdOX3+eDb/6g2qYte/jER6+t8LkieZZ4xiIj057J9gVvM6J+j2dMyvx1Zlaxas
-                  KptUInilQZ4PQes2wLz9WbOqge48q0kMV4nTUlsJOrysdhdSFH51uR/cLHjmaEN5
-                  3dc3BlxJMYU8qaZRasE5W0bWQaF33nM8UrAK2jenQcrPaugohRe6XCCRk3ftWK9Q
-                  dG+APNlRH/OB+lwsYdlrkiKBQPAn2txu+wiYTR8gA4yjJNISNHCeD5QU9ZfGOU1S
-                  NoJvswbiV06QQDqsBOG7ZgUZaeWySa2O6nz6ZbqLtQKBgQDoWuYda6lMp+zmmQqa
-                  TGJqVoKVWHiU7X3MxlOXMzKdODQKrtNY3i5HXZGr6RKHKiJS7JiEWeYfkn1/Htng
-                  03XUabZZD02XhBkuQArFise7hpUB5Qzlot9igd5AhS9L8yAIG61x0fTsWyFrH4Us
-                  mROI6F5N6uCOmN25JVLQyc2QgwKBgQDJhMDitOz5R4u422I3yZKjNGkOsIt62s9B
-                  7aXsNlZKzELUxsU7NAGhIjreISpjUQpulzrGA8BBTvLBOPZ9arSptY3X7viM54py
-                  PCMznfTz0HOWAldB1LcArWWwBVzb25YMyyzAQov1tWOUQZF8+B4FySvi+1VS6jHv
-                  mgfT2zoj9wKBgQDhQO4A65RvGgSR8R/UQeTOzhs+CUyspCfm0wXKePnCbPAWwzFk
-                  38/ho5ZLIGKz4mbwGSoqdLShOvSqvg/e42FBkVITuMAx+QAoVDGdHFNROsFN2u3L
-                  2T/SUbBSwEr/yCzvb1WQGEjmsdoN7bq/Z48GlK6HvwH/e7bHfKVyf5DnXQKBgQCK
-                  pkcb9EWzgZFVn8PlBFBa7/10eO2OmqvM/ZiSfBRFJGK7CQO8pxyT4/xCxujmKmUW
-                  EAEFKqGFja8iWHHneppQxbSRJD9omwo7bLr/kadudTaBuJyWk6dR1PvI7vej4WJM
-                  7SGeKmsnpCSeZbqXFBN8AZyrcCeVg8LVytGl5wkKowKBgDPkDxqxLjZtPPGHuK4A
-                  7U0JqZlUyZL8XuXO5Ev7g01iCD6zffdJL/033E9O3YtAUNF7xQIg+09KzCZtFYeQ
-                  Xt+a/fUWWkEFyeFd2YucVKZthM03utlMXyBsRQ7LHyag+nhONQnCDH5WaAXPpcdb
-                  VS0zROebpYDsKbg+2GWNHHfO
-                  -----END PRIVATE KEY-----
-                  -----BEGIN CERTIFICATE-----
-                  MIIFHzCCBAegAwIBAgISAw0DvELuwpFrwVG886zw8TmNMA0GCSqGSIb3DQEBCwUA
-                  MEoxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MSMwIQYDVQQD
-                  ExpMZXQncyBFbmNyeXB0IEF1dGhvcml0eSBYMzAeFw0xNzEwMTEwNzA4MTdaFw0x
-                  ODAxMDkwNzA4MTdaMCkxJzAlBgNVBAMTHmtpbmRlcmJvZWtlbi5kZW1vLmNsb3Vk
-                  dnBzLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALbn3J2xv6cN
-                  kTawO97AxH+Qs/qoA9D6K+3Vdi78RmX/zZosr2wAI6FWmkMn46HIgbRUJcc6pjZI
-                  kLXCuGO/7TwVrK48HOrs78vV3PCnZBH9g8BTJWhU3fedYfrRMaN0rGCTatHCML7A
-                  b1DXqiVkWtdHmqN+BWdW4wCVJE1Td5eF08lG15I2NY68Qa+ex4ONs4T0ejXnV41j
-                  0Hu1IdPJ81hlEZ3XX2IedsZf8E7L25Jrb0Osq4P2VfbbAxrd629yqqcV7/syZC8V
-                  Vy7XWhNkcMKXtN4xxvHoVKWyexYvHzz4vkw6bUrNKl72vIR/d49bp3zBXKwkiFzM
-                  THW3NZ7GV2UCAwEAAaOCAh4wggIaMA4GA1UdDwEB/wQEAwIFoDAdBgNVHSUEFjAU
-                  BggrBgEFBQcDAQYIKwYBBQUHAwIwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQUoOsl
-                  4S5cw2MElpzo3q/bTfs0r4MwHwYDVR0jBBgwFoAUqEpqYwR93brm0Tm3pkVl7/Oo
-                  7KEwbwYIKwYBBQUHAQEEYzBhMC4GCCsGAQUFBzABhiJodHRwOi8vb2NzcC5pbnQt
-                  eDMubGV0c2VuY3J5cHQub3JnMC8GCCsGAQUFBzAChiNodHRwOi8vY2VydC5pbnQt
-                  eDMubGV0c2VuY3J5cHQub3JnLzApBgNVHREEIjAggh5raW5kZXJib2VrZW4uZGVt
-                  by5jbG91ZHZwcy5jb20wgf4GA1UdIASB9jCB8zAIBgZngQwBAgEwgeYGCysGAQQB
-                  gt8TAQEBMIHWMCYGCCsGAQUFBwIBFhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9y
-                  ZzCBqwYIKwYBBQUHAgIwgZ4MgZtUaGlzIENlcnRpZmljYXRlIG1heSBvbmx5IGJl
-                  IHJlbGllZCB1cG9uIGJ5IFJlbHlpbmcgUGFydGllcyBhbmQgb25seSBpbiBhY2Nv
-                  cmRhbmNlIHdpdGggdGhlIENlcnRpZmljYXRlIFBvbGljeSBmb3VuZCBhdCBodHRw
-                  czovL2xldHNlbmNyeXB0Lm9yZy9yZXBvc2l0b3J5LzANBgkqhkiG9w0BAQsFAAOC
-                  AQEABRKHLXRz51FCgXaP3vpHwIUD+BaXplOZ4OnVvXHohIpdR34LWkTsmDxt4A6R
-                  gRn9KaFqTQ6tTubfpwSSoqlpCHZwk6nUoZHaD+jii9Q1E1JbCsXGkfDthqZwvAV9
-                  z863hz5giIIEqmsCkAvJlscIV5BzRoIrgLy+G1Z52s0uF5pplaKuA0/ah+jWGSAQ
-                  L07LRVDX0x4WhA1fWCdaJbYZLnQK/nzLHlxgFu7NgF0ZInce8ROtTbUZkg7iTFPq
-                  DOxb4yXxnQ0/fTJMyrFy2HPnt23Dp1Vs/NQyGGkUSPOSFlbLnuSe2ErrB8Taois9
-                  gT5RwmN367ur504DTTWhmyCweg==
-                  -----END CERTIFICATE-----
-                  -----BEGIN CERTIFICATE-----
-                  MIIEkjCCA3qgAwIBAgIQCgFBQgAAAVOFc2oLheynCDANBgkqhkiG9w0BAQsFADA/
-                  MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
-                  DkRTVCBSb290IENBIFgzMB4XDTE2MDMxNzE2NDA0NloXDTIxMDMxNzE2NDA0Nlow
-                  SjELMAkGA1UEBhMCVVMxFjAUBgNVBAoTDUxldCdzIEVuY3J5cHQxIzAhBgNVBAMT
-                  GkxldCdzIEVuY3J5cHQgQXV0aG9yaXR5IFgzMIIBIjANBgkqhkiG9w0BAQEFAAOC
-                  AQ8AMIIBCgKCAQEAnNMM8FrlLke3cl03g7NoYzDq1zUmGSXhvb418XCSL7e4S0EF
-                  q6meNQhY7LEqxGiHC6PjdeTm86dicbp5gWAf15Gan/PQeGdxyGkOlZHP/uaZ6WA8
-                  SMx+yk13EiSdRxta67nsHjcAHJyse6cF6s5K671B5TaYucv9bTyWaN8jKkKQDIZ0
-                  Z8h/pZq4UmEUEz9l6YKHy9v6Dlb2honzhT+Xhq+w3Brvaw2VFn3EK6BlspkENnWA
-                  a6xK8xuQSXgvopZPKiAlKQTGdMDQMc2PMTiVFrqoM7hD8bEfwzB/onkxEz0tNvjj
-                  /PIzark5McWvxI0NHWQWM6r6hCm21AvA2H3DkwIDAQABo4IBfTCCAXkwEgYDVR0T
-                  AQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAYYwfwYIKwYBBQUHAQEEczBxMDIG
-                  CCsGAQUFBzABhiZodHRwOi8vaXNyZy50cnVzdGlkLm9jc3AuaWRlbnRydXN0LmNv
-                  bTA7BggrBgEFBQcwAoYvaHR0cDovL2FwcHMuaWRlbnRydXN0LmNvbS9yb290cy9k
-                  c3Ryb290Y2F4My5wN2MwHwYDVR0jBBgwFoAUxKexpHsscfrb4UuQdf/EFWCFiRAw
-                  VAYDVR0gBE0wSzAIBgZngQwBAgEwPwYLKwYBBAGC3xMBAQEwMDAuBggrBgEFBQcC
-                  ARYiaHR0cDovL2Nwcy5yb290LXgxLmxldHNlbmNyeXB0Lm9yZzA8BgNVHR8ENTAz
-                  MDGgL6AthitodHRwOi8vY3JsLmlkZW50cnVzdC5jb20vRFNUUk9PVENBWDNDUkwu
-                  Y3JsMB0GA1UdDgQWBBSoSmpjBH3duubRObemRWXv86jsoTANBgkqhkiG9w0BAQsF
-                  AAOCAQEA3TPXEfNjWDjdGBX7CVW+dla5cEilaUcne8IkCJLxWh9KEik3JHRRHGJo
-                  uM2VcGfl96S8TihRzZvoroed6ti6WqEBmtzw3Wodatg+VyOeph4EYpr/1wXKtx8/
-                  wApIvJSwtmVi4MFU5aMqrSDE6ea73Mj2tcMyo5jMd6jmeWUHK8so/joWUoHOUgwu
-                  X4Po1QYz+3dszkDqMp4fklxBwXRsW10KXzPMTZ+sOPAveyxindmjkW8lGy+QsRlG
-                  PfZ+G6Z6h7mjem0Y+iWlkYcV4PIWL1iwBi8saCbGS5jN2p8M+X+Q7UNKEkROb3N6
-                  KOqkqm57TH2H3eDJAkSnh6/DNFu0Qg==
-                  -----END CERTIFICATE-----
-                  " > /etc/letsencrypt/live/$DOMAIN.pem
+
+
                   cat /etc/letsencrypt/live/$DOMAIN/privkey.pem > /etc/letsencrypt/live/$DOMAIN.pem
                   cat /etc/letsencrypt/live/$DOMAIN/cert.pem >> /etc/letsencrypt/live/$DOMAIN.pem
                   cat /etc/letsencrypt/live/$DOMAIN/chain.pem >> /etc/letsencrypt/live/$DOMAIN.pem
-                  echo "frontend http-in
-                      mode http
-                      bind 0.0.0.0:80
-                      bind 0.0.0.0:443 ssl crt /etc/letsencrypt/live/$DOMAIN.pem no-sslv3 crt-ignore-err all strict-sni
 
-                      default_backend appservers
+                  echo "frontend http-in
+                        mode http
+                        bind 0.0.0.0:80
+                  " > /etc/haproxy/haproxy.cfg
+
+                  if [ -f /etc/letsencrypt/live/$DOMAIN/privkey.pem ]; then
+                  echo "      bind 0.0.0.0:443 ssl crt /etc/letsencrypt/live/$DOMAIN.pem no-sslv3 crt-ignore-err all strict-sni" >> /etc/haproxy/haproxy.cfg
+                  fi
+
+                  echo "    
+                        default_backend appservers
                   
                   backend appservers
                         mode            http
@@ -611,17 +539,16 @@ resources:
 
 
   deployserver:
-    type: My::Cluster::InstanceFloat
+    type: My::Cluster::Instance2interfaces
     properties:
       name:
         list_join: ['-', [ {get_param: 'OS::stack_name'}, 'deployserver']]
       key_name: { get_param: key_name }
       image: { get_param: image }
       flavor: { get_param: deployflavor }
-      private_net: { get_resource: private_net }
-      private_subnet: { get_resource: private_subnet }
       sec_group: { get_resource: sec_group_external }
-      public_net: { get_param: public_net }
+      first_net: { get_param: public_net }
+      second_net: { get_resource: private_net }
       user_data: { get_file: 'user_data_deploy.sh' }
       availability_zones: { get_param: master_availability_zones }
       index: 0
@@ -639,9 +566,9 @@ outputs:
   LB_Floating_ip:
     value: { get_param: 'lb_floatingip' }
     description: The floating ip of the loadbalaner servers configured in keepalived
-  Deployserver_Float_ip:
-    value: { get_attr: [ deployserver, floating_ip ] }
-    description: The floating ip of the deployserver
+  Deployserver_ip:
+    value: { get_attr: [ deployserver, instance_ip ] }
+    description: The ip of the deployserver
   LBservers_ip:
     description: "internal ip addresses of lb servers"
     value: { get_attr: [ lbservers, instance_ip]}

@@ -1,13 +1,8 @@
 #! /bin/sh -v
-WP_DOMAIN="f1shop.demo.cloudvps.com"
-WP_ADMIN_USERNAME="admin"
-WP_ADMIN_PASSWORD="admin"
-WP_ADMIN_EMAIL="no@spam.org"
 WP_DB_NAME="wordpress"
 WP_DB_USERNAME="wordpress"
 WP_DB_PASSWORD="wordpress"
 WP_DB_HOST="10.0.0.11"
-WP_PATH="/var/www/wordpress"
 MYSQL_ROOT_PASSWORD="root"
 
 apt-get update
