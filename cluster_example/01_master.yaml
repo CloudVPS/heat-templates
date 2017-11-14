@@ -540,6 +540,7 @@ resources:
 
   deployserver:
     type: My::Cluster::Instance2interfaces
+    depends_on: [ private_subnet ]
     properties:
       name:
         list_join: ['-', [ {get_param: 'OS::stack_name'}, 'deployserver']]
