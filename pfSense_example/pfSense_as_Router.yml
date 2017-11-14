@@ -1,0 +1,116 @@
+# Heat template to create a network and pfSense instance
+# with correct allowed address pairs for routing.
+# Use as: openstack stack create -t pfSense_example/pfSense.yml stackname
+# 
+# Author: Cees Moerkerken, <http://virtu-on.nl>
+# Author: Remy van Elst <https://raymii.org>
+# Copyright (C) 2017 CloudVPS
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
+heat_template_version: 2016-04-08
+
+description: Creates an internal network and subnet, pfsense instance and set correct allowed_address_pairs for routing. Does not create instance in network behind pfsense.
+
+################
+## Parameters ##
+################
+
+parameters:
+  private_net_name:
+    type: string
+    label: Private network name
+    description: Name of private network to be created
+    default: pfsense-private-net
+
+  private_subnet_name: 
+    type: string
+    label: Pivate subnet name
+    description: Name of private subnet
+    default: pfsense-private-subnet
+
+  private_net_cidr:
+    type: string
+    label: Network CIDR
+    description: Private network address (CIDR notation)
+    default: 192.168.1.1/24
+
+  private_net_gateway:
+    type: string
+    label: Network Gateway and pfSense IP (pfsense default is 192.168.1.1) (must match CIDR)
+    description: IP address which the pfsense must use (gateway IP). pfSense by default uses 192.168.1.1.
+    default: 192.168.1.1
+
+  image:
+    type: string
+    label: pfsense Router Image name or UUID
+    description: pfsense image name or UUID
+    default: "9f5f8ae7-cb1c-43de-9b91-1a618254d9a3"
+
+resources:
+
+##############
+## Network ###
+##############
+
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: {get_param: private_net_name }
+
+  # Subnet has gateway, but no router.
+  # pfsense port is allowed to spoof this gateway IP.
+  # we do this so OpenStack DHCP works and instances get and IP
+  # but all traffic goes through the pfsense.
+  # set up pfsense internal interface to 192.168.1.1 (default)
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: { get_param: private_subnet_name }
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      dns_nameservers:
+        - { get_param: private_net_gateway }
+
+  # due to a bug in neutron subnet 0.0.0.0/0
+  # doesn't work. Therefor we split the internet
+  # into two subnets, which does work.
+  pfsense_internal_port:
+    type: OS::Neutron::Port
+    properties:
+      admin_state_up: true
+      network_id: { get_resource: private_net }
+      allowed_address_pairs:
+        - ip_address: { get_param: private_net_gateway }
+        - ip_address: "1.0.0.0/1"
+        - ip_address: "128.0.0.0/1"
+      security_groups:
+        - allow-all
+
+  pfsense_external_port:
+    type: OS::Neutron::Port
+    properties:
+      admin_state_up: true
+      network_id: net-public
+      security_groups:
+        - allow-all
+
+
+##############
+## Instance ##
+##############
+
+# pfSense can run on a standard 1 but with addons like vpn or filtering
+# that becomes to slow.
+
+  pfsense_router_instance:
+      type: OS::Nova::Server
+      properties:
+        name: pfSense Router
+        image: { get_param: image }
+        flavor: "Small HD 4GB"
+        networks:
+          - port: { get_resource: pfsense_external_port } 
+          - port: { get_resource: pfsense_internal_port } 
