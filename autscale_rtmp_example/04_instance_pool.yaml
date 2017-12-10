@@ -1,0 +1,88 @@
+heat_template_version: 2013-05-23
+
+#description: Create appservers InstancePool
+
+parameters:
+  key_name:
+    type: string
+  image:
+    type: string
+  flavor:
+    type: string
+  private_net:
+    type: string
+  sec_group:
+    type: string
+
+  port1:
+    type: string
+  pool1:
+    type: string
+  port2:
+    type: string
+  pool2:
+    type: string
+  port3:
+    type: string
+  pool3:
+    type: string
+
+  private_subnet:
+    type: string
+  user_data:
+    type: string
+  availability_zones:
+    type: comma_delimited_list
+#  index:
+#    type: string
+
+resources:
+
+################
+## Instances ###
+################
+
+  instance:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks: [{ network: { get_param: private_net }}]
+      security_groups: [{ get_param: sec_group }]
+      user_data_format: RAW
+      user_data: { get_param: user_data }
+
+  pool_member_1:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      pool: { get_param: pool1 }
+      address: { get_attr: [ instance, first_address ]}
+      protocol_port: { get_param: port1 }
+      subnet: { get_param: private_subnet }
+
+  pool_member_2:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      pool: { get_param: pool2 }
+      address: { get_attr: [ instance, first_address ]}
+      protocol_port: { get_param: port2 }
+      subnet: { get_param: private_subnet }
+
+  pool_member_3:
+    type: OS::Neutron::LBaaS::PoolMember
+    properties:
+      pool: { get_param: pool3 }
+      address: { get_attr: [ instance, first_address ]}
+      protocol_port: { get_param: port3 }
+      subnet: { get_param: private_subnet }
+
+
+outputs:
+  instance_resource_id:
+    description: The id of each deployed instance
+    value: { get_resource: instance }
+  instance_ip:
+    description: "ip address"
+    value: { get_attr: [ instance, first_address ]}
+

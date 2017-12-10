@@ -1,0 +1,462 @@
+heat_template_version: 2015-10-15
+
+description: A rtmp streaming cluster, with two LBaaS's, each with an pre-defined floating IP.
+
+parameters:
+
+  key_name:
+    type: string
+    description: Name of keypair to assign to servers
+  source_stream:
+    type: string
+    default: "rtmp://83.96.202.138:80/live/test"
+    description: source stream that will be re-streamed
+  floatingip1:
+    type: string
+    default: "25243c96-7b48-434c-bb1a-d562b2b78c69"
+    description: Floating IP for LBaaS instance 1
+  floatingip2:
+    type: string
+    default: "93c36071-4123-40a0-ba2c-527051884ed3"
+    description: Floating IP for LBaaS instance 2
+
+
+  image:
+    type: string
+    default: "Ubuntu 16.04 (LTS)"
+    description: Image used for all servers
+  appflavor:
+    type: string
+    default: "Standard 1GB"
+    description: Flavor used for app servers
+  app_count_min:
+    type: string
+    default: 2
+  app_count_max:
+    type: string
+    default: 30
+
+  http_port:
+    type: string
+    default: 80
+    description: Port used by the webservers
+  https_port:
+    type: string
+    default: 443
+    description: Port used by the webservers
+  stream_port:
+    type: string
+    default: 1935
+    description: Port used by the re-streaming servers
+
+  deployflavor:
+    type: string
+    default: "Standard 1GB"
+    description: Flavor used for deploy/bastion server
+
+  master_availability_zones:
+    type: comma_delimited_list
+    default: ["AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3","AMS-EQ1","AMS-EQ3",]
+
+  sec_group_router:
+    type: comma_delimited_list
+    default: ["allow-all","allow-icmp"]
+
+  public_net:
+    type: string
+    default: net-public
+    description: ID or name of public network for direct attached ip's
+  floating_net:
+    type: string
+    default: floating
+    description: ID or name of public network for which floating IP addresses will be allocated
+  private_net_name:
+    type: string
+    default: net-private-01
+    description: Name of private network to be created
+  private_net_cidr:
+    type: string
+    default: 10.0.0.0/24
+    description: Private network address (CIDR notation)
+  private_net_gateway:
+    type: string
+    default: 10.0.0.1
+    description: Private network gateway address
+  private_net_pool_start:
+    type: string
+    default: 10.0.0.10
+    description: Start of private network IP address allocation pool
+  private_net_pool_end:
+    type: string
+    default: 10.0.0.250
+    description: End of private network IP address allocation pool
+
+
+
+resources:
+
+################
+## Networking ##
+################
+# Networking via resource registry does not work in the current version
+# Therefore it's done here.
+
+  sec_group_external:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-external']]
+      rules:
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: egress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: { get_param: http_port }
+          port_range_max: { get_param: http_port }
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: { get_param: stream_port }
+          port_range_max: { get_param: stream_port }
+        - remote_ip_prefix: 10.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: 22
+          port_range_max: 22
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: egress
+          port_range_min: 22
+          port_range_max: 22
+
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: egress
+
+  sec_group_internal:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-internal-allow-all']]
+      rules:
+        - direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          direction: egress
+        - ethertype: IPv6
+          direction: ingress
+        - remote_ip_prefix: ::/0
+          direction: egress
+          ethertype: IPv6
+
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: 
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, {get_param: private_net_name }]]
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      gateway_ip: { get_param: private_net_gateway }
+      dns_nameservers: [{ get_param: private_net_gateway }]
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+
+  router:
+    type: OS::Neutron::Router
+    properties:
+      admin_state_up: true
+      external_gateway_info:
+        network: { get_param: floating_net }
+
+  router_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: private_net }
+      fixed_ips:  [{"subnet": { get_resource: private_subnet }, "ip_address": { get_param: private_net_gateway }}]
+      security_groups: { get_param: sec_group_router }
+
+  router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      port_id: { get_resource: router_port }
+
+
+
+############
+## LBaaS ###
+############
+
+  loadbalancer1:
+    type: My::Cluster::Loadbalancer
+    properties:
+      http_port: { get_param: http_port }
+      tcp_port1: { get_param: https_port }
+      tcp_port2: { get_param: stream_port }
+      public_net: { get_param: floating_net }
+      reserved_floating_ip: { get_param: floatingip1 }
+      private_net_cidr: { get_param: private_net_cidr }
+      subnet_id: { get_resource: private_subnet }
+
+  loadbalancer2:
+    type: My::Cluster::Loadbalancer
+    properties:
+      http_port: { get_param: http_port }
+      tcp_port1: { get_param: https_port }
+      tcp_port2: { get_param: stream_port }
+      public_net: { get_param: floating_net }
+      reserved_floating_ip: { get_param: floatingip2 }
+      private_net_cidr: { get_param: private_net_cidr }
+      subnet_id: { get_resource: private_subnet }
+
+################
+## Instances ###
+################
+#lbserver not needed if you use lbaas
+
+  asg1:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      min_size: {get_param: app_count_min}
+      max_size: {get_param: app_count_max}
+      resource:
+        type: My::Cluster::InstancePool
+        properties:
+#          name: 
+#            list_join: ['-', [ {get_param: 'OS::stack_name'}, 'app%index%']]
+          key_name: { get_param: key_name }
+          image: { get_param: image }
+          flavor: { get_param: appflavor }
+          private_net: { get_resource: private_net }
+          sec_group: { get_resource: sec_group_internal }
+          port1: { get_param: http_port }
+          pool1: { get_attr: [ loadbalancer1, pool_id_http ]}
+          port2: { get_param: https_port }
+          pool2: { get_attr: [ loadbalancer1, pool_id_tcp1 ]}
+          port3: { get_param: stream_port }
+          pool3: { get_attr: [ loadbalancer1, pool_id_tcp2 ]}
+          private_subnet: { get_resource: private_subnet }
+          availability_zones: { get_param: master_availability_zones }
+#          index: '%index%'
+          user_data: 
+              str_replace:
+                template: |
+                  #!/bin/bash
+                  apt update
+                  apt install build-essential libpcre3 libpcre3-dev libssl-dev unzip -y
+                  wget http://nginx.org/download/nginx-1.13.1.tar.gz
+                  wget https://github.com/arut/nginx-rtmp-module/archive/master.zip
+                  tar -zxvf nginx-1.13.1.tar.gz
+                  unzip master.zip
+                  
+                  cd nginx-1.13.1
+                  ./configure --with-http_ssl_module --add-module=../nginx-rtmp-module-master
+                  make
+                  make install
+                  
+                  echo "
+                  rtmp {
+                          server {
+                                  listen 1935;
+                                  chunk_size 4096;
+                  
+                                  application live {
+                                          deny publish all;
+                                          allow play all;
+                                          pull $SOURCESTREAM name=cloudvpstree;
+                                          live on;
+                                          record off;
+                                          wait_key on;
+                                          interleave on;
+                                          publish_notify on;
+                                          sync 10ms;
+                                          wait_video on;
+                                  }
+                          }
+                  }" >> /usr/local/nginx/conf/nginx.conf
+                  
+                  /usr/local/nginx/sbin/nginx -s stop
+                  /usr/local/nginx/sbin/nginx
+                params:
+                  $SOURCESTREAM: {get_param: 'source_stream'}
+
+  web_server_scaleup_policy1:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: asg1}
+      cooldown: 60
+      scaling_adjustment: 1
+  web_server_scaledown_policy1:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: asg1}
+      cooldown: 60
+      scaling_adjustment: -1
+  cpu_alarm_high1:
+    type: OS::Ceilometer::Alarm
+    properties:
+      meter_name: cpu_util
+      statistic: avg
+      period: 60
+      evaluation_periods: 1
+      threshold: 80
+      alarm_actions:
+        - {get_attr: [web_server_scaleup_policy1, alarm_url]}
+      comparison_operator: gt
+
+  cpu_alarm_low1:
+    type: OS::Ceilometer::Alarm
+    properties:
+      meter_name: cpu_util
+      statistic: avg
+      period: 60
+      evaluation_periods: 1
+      threshold: 15
+      alarm_actions:
+        - {get_attr: [web_server_scaledown_policy1, alarm_url]}
+      comparison_operator: lt
+
+
+
+  asg2:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      min_size: {get_param: app_count_min}
+      max_size: {get_param: app_count_max}
+      resource:
+        type: My::Cluster::InstancePool
+        properties:
+#          name:
+#            list_join: ['-', [ {get_param: 'OS::stack_name'}, 'app%index%']]
+          key_name: { get_param: key_name }
+          image: { get_param: image }
+          flavor: { get_param: appflavor }
+          private_net: { get_resource: private_net }
+          sec_group: { get_resource: sec_group_internal }
+          port1: { get_param: http_port }
+          pool1: { get_attr: [ loadbalancer2, pool_id_http ]}
+          port2: { get_param: https_port }
+          pool2: { get_attr: [ loadbalancer2, pool_id_tcp1 ]}
+          port3: { get_param: stream_port }
+          pool3: { get_attr: [ loadbalancer2, pool_id_tcp2 ]}
+          private_subnet: { get_resource: private_subnet }
+          availability_zones: { get_param: master_availability_zones }
+#          index: '%index%'
+          user_data:
+              str_replace:
+                template: |
+                  #!/bin/bash
+                  apt update
+                  apt install build-essential libpcre3 libpcre3-dev libssl-dev unzip -y
+                  wget http://nginx.org/download/nginx-1.13.1.tar.gz
+                  wget https://github.com/arut/nginx-rtmp-module/archive/master.zip
+                  tar -zxvf nginx-1.13.1.tar.gz
+                  unzip master.zip
+
+                  cd nginx-1.13.1
+                  ./configure --with-http_ssl_module --add-module=../nginx-rtmp-module-master
+                  make
+                  make install
+
+                  echo "
+                  rtmp {
+                          server {
+                                  listen 1935;
+                                  chunk_size 4096;
+                  
+                                  application live {
+                                          deny publish all;
+                                          allow play all;
+                                          pull $SOURCESTREAM name=cloudvpstree;
+                                          live on;
+                                          record off;
+                                          wait_key on;
+                                          interleave on;
+                                          publish_notify on;
+                                          sync 10ms;
+                                          wait_video on;
+                                  }
+                          }
+                  }" >> /usr/local/nginx/conf/nginx.conf
+
+                  /usr/local/nginx/sbin/nginx -s stop
+                  /usr/local/nginx/sbin/nginx
+                params:
+                  $SOURCESTREAM: {get_param: 'source_stream'}
+
+  web_server_scaleup_policy2:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: asg2}
+      cooldown: 60
+      scaling_adjustment: 1
+  web_server_scaledown_policy2:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: asg2}
+      cooldown: 60
+      scaling_adjustment: -1
+  cpu_alarm_high2:
+    type: OS::Ceilometer::Alarm
+    properties:
+      meter_name: cpu_util
+      statistic: avg
+      period: 60
+      evaluation_periods: 1
+      threshold: 80
+      alarm_actions:
+        - {get_attr: [web_server_scaleup_policy2, alarm_url]}
+      comparison_operator: gt
+  cpu_alarm_low2:
+    type: OS::Ceilometer::Alarm
+    properties:
+      meter_name: cpu_util
+      statistic: avg
+      period: 60
+      evaluation_periods: 1
+      threshold: 15
+      alarm_actions:
+        - {get_attr: [web_server_scaledown_policy2, alarm_url]}
+      comparison_operator: lt
+
+
+
+  deployserver:
+    type: My::Cluster::Instance2interfaces
+    depends_on: [ private_subnet ]
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'deployserver']]
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: deployflavor }
+      sec_group: { get_resource: sec_group_external }
+      first_net: { get_param: public_net }
+      second_net: { get_resource: private_net }
+      user_data: { get_file: 'user_data_deploy.sh' }
+      availability_zones: { get_param: master_availability_zones }
+      index: 0
+
+
+#############
+## Outputs ##
+#############
+
+outputs:
+
+  Deployserver_ip:
+    value: { get_attr: [ deployserver, instance_ip ] }
+    description: The ip of the deployserver
+

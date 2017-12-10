@@ -1,0 +1,127 @@
+heat_template_version: 2015-10-15
+
+#description: A webcluster in one template.
+parameters:
+
+  http_port:
+    type: string
+  tcp_port1:
+    type: string
+  tcp_port2:
+    type: string
+  public_net:
+    type: string
+  reserved_floating_ip:
+    type: string
+  private_net_cidr:
+    type: string
+  subnet_id:
+    type: string
+    
+
+resources:
+
+############
+## LBaaS ###
+############
+
+  loadbalancer:
+    type: OS::Neutron::LBaaS::LoadBalancer
+    properties:
+      vip_subnet: { get_param: subnet_id }
+
+## HTTP ##
+  listenerhttp:
+    type: OS::Neutron::LBaaS::Listener
+    properties:
+      loadbalancer: { get_resource: loadbalancer }
+      protocol: HTTP
+      protocol_port: { get_param: http_port }
+
+  poolhttp:
+    type: OS::Neutron::LBaaS::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      protocol: HTTP
+      listener: { get_resource: listenerhttp }
+
+  monitorhttp:
+    type: OS::Neutron::LBaaS::HealthMonitor
+    properties:
+      admin_state_up: True
+      delay: 3
+      type: HTTP #'PING', 'TCP', 'HTTP', 'HTTPS'
+      timeout: 3
+      max_retries: 3
+      pool: { get_resource: poolhttp }
+
+## TCP ##
+  listenertcp1:
+    type: OS::Neutron::LBaaS::Listener
+    properties: 
+      loadbalancer: { get_resource: loadbalancer }
+      protocol: TCP
+      protocol_port: { get_param: tcp_port1 }
+
+  pooltcp1:
+    type: OS::Neutron::LBaaS::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      protocol: TCP
+      listener: { get_resource: listenertcp1 }
+
+  monitortcp1:
+    type: OS::Neutron::LBaaS::HealthMonitor
+    properties:
+      admin_state_up: True
+      delay: 3
+      type: TCP #'PING', 'TCP', 'HTTP', 'HTTPS'
+      timeout: 3
+      max_retries: 3
+      pool: { get_resource: pooltcp1 }
+
+
+  listenertcp2:
+    type: OS::Neutron::LBaaS::Listener
+    properties:
+      loadbalancer: { get_resource: loadbalancer }
+      protocol: TCP
+      protocol_port: { get_param: tcp_port2 }
+
+  pooltcp2:
+    type: OS::Neutron::LBaaS::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      protocol: TCP
+      listener: { get_resource: listenertcp2 }
+
+  monitortcp2:
+    type: OS::Neutron::LBaaS::HealthMonitor
+    properties:
+      admin_state_up: True
+      delay: 3
+      type: TCP #'PING', 'TCP', 'HTTP', 'HTTPS'
+      timeout: 3
+      max_retries: 3
+      pool: { get_resource: pooltcp2 }
+
+  floating_ip:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_param: reserved_floating_ip }
+      port_id: { get_attr: [loadbalancer, vip_port_id ]}
+
+outputs:
+  pool_id_http:
+    value: { get_resource: poolhttp }
+    description: "id the pool associated with this loadbalancer"
+  pool_id_tcp1:
+    value: { get_resource: pooltcp1 }
+    description: "id the pool associated with this loadbalancer"
+  pool_id_tcp2:
+    value: { get_resource: pooltcp2 }
+    description: "id the pool associated with this loadbalancer"
+  loadbalancer_id:
+    value: { get_resource: load-balancer }
+    description: "id the loadbalancer"
+
