@@ -1,12 +1,6 @@
 resource_registry:
-#  My::Cluster::Network:                ./02_network.yaml
   My::Cluster::Loadbalancer:           ./03_lbaas.yaml
   My::Cluster::InstancePool:           ./04_instance_pool.yaml
-#  My::Cluster::InstancePoolVol:        ./04_instance_pool_vol.yaml
   My::Cluster::InstanceInternal:       ./04_instance_internal.yaml
-#  My::Cluster::InstanceInternalVol:    ./04_instance_internal_vol.yaml
-#  My::Cluster::InstanceInternalVolVip: ./04_instance_internal_vol_vip.yaml
-#  My::Cluster::InstanceFloat:          ./04_instance_float.yaml
-#  My::Cluster::InstanceDirect:         ./04_instance_public.yaml
-  My::Cluster::Instance2interfaces:    ./04_instance_2interfaces.yaml
+  My::Cluster::InstanceFloat:          ./04_instance_float.yaml
 

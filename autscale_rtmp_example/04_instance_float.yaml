@@ -1,6 +1,6 @@
-heat_template_version: 2013-05-23
+heat_template_version: 2015-10-15
 
-description: Create instance with two interfaces
+#description: Create InstanceFloat
 
 parameters:
   name:
@@ -13,15 +13,15 @@ parameters:
     type: string
   sec_group:
     type: string
-  first_net:
+  private_net:
     type: string
-  second_net:
+  private_subnet:
+    type: string
+  public_net:
+    type: string
+  reserved_floating_ip:
     type: string
   user_data:
-    type: string
-  availability_zones:
-    type: comma_delimited_list
-  index:
     type: string
 
 resources:
@@ -37,11 +37,16 @@ resources:
       key_name: { get_param: key_name }
       image: { get_param: image }
       flavor: { get_param: flavor }
-      networks: [{ network: { get_param: first_net }},{ network: { get_param: second_net }}]
+      networks: [{ network: { get_param: private_net }}]
       security_groups: [{ get_param: sec_group }]
       user_data_format: RAW
       user_data: { get_param: user_data }
-      availability_zone: { get_param: [ availability_zones, get_param: index ] }
+
+  instance_floating_ip_assoc0_instance0:
+    type: OS::Nova::FloatingIPAssociation
+    properties:
+      floating_ip: { get_param: reserved_floating_ip }
+      server_id: { get_resource: instance }
 
 outputs:
   instance_resource_id:
