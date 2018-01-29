@@ -40,7 +40,15 @@ Use as;
 
 LBaaS_resource.yaml is included by the environment file.
 
-## keepalived_example
+## autscale_rtmp_example
+Example on how to create an autoscaling rtmp cluster.
+
+For more info check out our [blog post](https://www.cloudvps.com/blog/our-christmas-tree-project)
+
+
+
+
+## cluster_example_basic
 Examples to create a keepalived cluster with LBaaS or two or more keepalived servers in front of 4 or more appservers.
 
 Use as:
