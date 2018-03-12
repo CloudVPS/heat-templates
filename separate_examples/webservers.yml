@@ -50,7 +50,7 @@ parameters:
     type: string
     label: Network name
     description: Name of existing network to be used
-    default: private-net
+    default: net-private
 
   sec_group:
     default: default-allow-all

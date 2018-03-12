@@ -16,12 +16,6 @@ description: Create 2 instances with a additional port for VRRP in a existing in
 ################
 
 parameters:
-#  VRRP_server_count:
-#    type: number
-#    label: Internal Sever Count
-#    description: Number of internal servers
-#    default: 2
-
   VRRP_servers_basename:
     type: string
     label: Instance base name
@@ -52,15 +46,21 @@ parameters:
     description: Name of public network for floating IP
     default: floating
 
+  floating_ips:
+    type: string
+    label: registered floating IP's
+    description: Registered floating IP's that will be used by VRRP
+    default: " "
+
   private_net:
     type: string
-    label:
+    label: Private Network
     description: Name of private network
-    default: private-net
+    default: net-private
 
   private_subnet: 
     type: string
-    label: 
+    label: Private Subnet 
     description: Name of private network
     default: private-subnet
 
@@ -70,7 +70,9 @@ parameters:
     description: Name or ID of the existing security group for the instances (VRRP is allowed in new group)
     default: default
 
+
 resources:
+
 #####################
 ## Security Groups ##
 #####################
@@ -79,24 +81,36 @@ resources:
     type: OS::Neutron::SecurityGroup
     properties:
       name:
-        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-vrrp']]
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'secgroup-ssh-vrrp-icmp']]
       rules:
-        - remote_mode: remote_group_id
-          protocol: 112
-          direction: egress
-        - remote_mode: remote_group_id
-          protocol: 112
-          direction: ingress
-        - remote_mode: remote_group_id
+#TCP
+        - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: ingress
           port_range_min: 22
           port_range_max: 22
-        - remote_mode: remote_group_id
+        - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: egress
-          port_range_min: 22
-          port_range_max: 22
+#UDP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: udp
+          direction: egress
+#VRRP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: 112
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: 112
+          direction: egress
+#ICMP
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: ingress
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: icmp
+          direction: egress
+
 
 ################
 ## Networking ##
@@ -110,69 +124,14 @@ resources:
       fixed_ips:
         - subnet_id: { get_param: private_subnet }
 
-# Create instance ports that have an internal IP and are allowed to use the Virtual IP
-  instance01_port:
-    type: OS::Neutron::Port
-    properties:
-      admin_state_up: true
-      network_id: { get_param: private_net }
-      allowed_address_pairs:
-        - ip_address: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
-      security_groups:
-        - { get_resource: sec_group_vrrp }
-        - { get_param: sec_group }
-
-  instance02_port:
-    type: OS::Neutron::Port
-    properties:
-      network_id: { get_param: private_net }
-      allowed_address_pairs:
-        - ip_address: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
-      security_groups:
-        - { get_resource: sec_group_vrrp }
-        - { get_param: sec_group }
-
-# Assign a floating ip
-#  floating_ip01:
-#    type: OS::Neutron::FloatingIP
-#    properties:
-#      floating_network: { get_param: floating_net }
-#      port_id: { get_resource: vip01_port }
-
-  floating_ip_pool:
-    type: OS::ContrailV2::FloatingIpPool
-    properties:
-      virtual_network: { get_param: floating_net }
-
-
-# associate the vip to the instances and to the vip port
-  floating_ip01_assoc:
-    type: OS::ContrailV2::FloatingIp
-#    depends_on: [ floating_ip01 ]
-    properties:
-#      floating_ip_address: { get_resource: floating_ip01 }
-      virtual_machine_interface_refs: [ {get_resource: instance01_port}, {get_resource: instance02_port}, {get_resource: vip01_port}]
-      floating_ip_pool: {get_resource: floating_ip_pool}
-
-
-
-#  floating_ip01_assoc_inst01:
-#    type: OS::Neutron::FloatingIPAssociation
-#    properties:
-#      floatingip_id: { get_resource: floating_ip01 }
-#      port_id: { get_resource: instance01_port }
-#
-#  floating_ip01_assoc_inst02:
-#    type: OS::Neutron::FloatingIPAssociation
-#    properties:
-#      floatingip_id: { get_resource: floating_ip01 }
-#      port_id: { get_resource: instance02_port }
-
-
 
 ###############
 ## Instances ##
 ###############
+  auth_pass:
+      type: 'OS::Heat::RandomString'
+      properties:
+        length: 8
 
   instance01:
     type: OS::Nova::Server
@@ -182,15 +141,17 @@ resources:
       key_name: { get_param: key_name }
       image: { get_param: image }
       flavor: { get_param: flavor }
-      networks:
-        - port: { get_resource: instance01_port }
+      networks: [{ network: { get_param: private_net }}]
+      security_groups: [{ get_resource: sec_group_vrrp }]
+      metadata: {"ha_vip_address": { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]},"ha_floatingips": { get_param: floating_ips },"ha_execution": "1"}
       user_data_format: RAW
       user_data:
         str_replace:
           template: |
             #!/bin/bash
             apt-get update
-            apt install keepalived haproxy rsyslog tcpdump -y
+            apt-get update
+            apt install keepalived -y
             echo "
             vrrp_sync_group VG_1 {
                  group {
@@ -209,7 +170,7 @@ resources:
             
                 authentication {
                     auth_type PASS
-                    auth_pass f4cbe02aeec63002eaf3580
+                    auth_pass $auth_pass
                 }
             
                 virtual_ipaddress {
@@ -221,8 +182,8 @@ resources:
             service keepalived restart
           params:
             $vip: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+            $auth_pass: {get_attr: [auth_pass, value]}
 
-#         get_file: user_data_lb.sh
 
   instance02:
     type: OS::Nova::Server
@@ -232,15 +193,17 @@ resources:
       key_name: { get_param: key_name }
       image: { get_param: image }
       flavor: { get_param: flavor }
-      networks:
-        - port: { get_resource: instance02_port } 
+      networks: [{ network: { get_param: private_net }}]
+      security_groups: [{ get_resource: sec_group_vrrp }]
+      metadata: {"ha_vip_address": { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]},"ha_floatingips": { get_param: floating_ips },"ha_execution": "1"}
       user_data_format: RAW
       user_data:
         str_replace:
           template: |
             #!/bin/bash
             apt-get update
-            apt install keepalived haproxy rsyslog tcpdump -y
+            apt-get update
+            apt install keepalived -y
             echo "
             vrrp_sync_group VG_1 {
                  group {
@@ -259,7 +222,7 @@ resources:
             
                 authentication {
                     auth_type PASS
-                    auth_pass f4cbe02aeec63002eaf3580
+                    auth_pass $auth_pass
                 }
             
                 virtual_ipaddress {
@@ -271,15 +234,16 @@ resources:
             service keepalived restart
           params:
             $vip: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+            $auth_pass: {get_attr: [auth_pass, value]}
 
 #############
 ## Outputs ##
 #############
 
-outputs:
-  VIP_Internal_ip:
-    value: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
-    description: Internal Virtual IP used in the keepalived config
+#outputs:
+#  VIP_Internal_ip:
+#    value: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+#    description: Internal Virtual IP used in the keepalived config
 #  VIP_Floating_ip:
 #    value: { get_attr: [floating_ip01, floating_ip_address]}
 #    description: The Floating IP attached to the internal ip port

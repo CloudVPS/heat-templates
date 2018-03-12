@@ -26,7 +26,7 @@ parameters:
     type: string
     label: Private network name
     description: Name of private network to be created
-    default: private-net
+    default: net-private
 
   private_subnet_name: 
     type: string
@@ -38,7 +38,7 @@ parameters:
     type: string
     label: Network CIDR
     description: Private network address (CIDR notation)
-    default: 10.0.0.0/24
+    default: 10.0.0.0/8
 
   private_net_gateway:
     type: string
@@ -50,7 +50,7 @@ parameters:
     type: string
     label: Security Group name
     description: Name of the security group for the loadbalancer
-    default: default-allow-all
+    default: allow-all
 
 
 resources:
@@ -90,29 +90,22 @@ resources:
   sec_group_allow_all:
     type: OS::Neutron::SecurityGroup
     properties:
-      name: { get_param: security_group_name }
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, { get_param: security_group_name }]]
+      description: allow all group created with heat
       rules:
-#TCP
+#IPV4
         - remote_ip_prefix: 0.0.0.0/0
-          protocol: tcp
           direction: egress
         - remote_ip_prefix: 0.0.0.0/0
-          protocol: tcp
           direction: ingress
-#UDP
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: tcp
+#IPV6
+        - remote_ip_prefix: ::/0
+          direction: ingress
+          ethertype: IPv6
+        - remote_ip_prefix: ::/0
           direction: egress
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: udp
-          direction: ingress
-#ICMP
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: icmp
-          direction: ingress
-        - remote_ip_prefix: 0.0.0.0/0
-          protocol: icmp
-          direction: egress
+          ethertype: IPv6
 
 
 #############

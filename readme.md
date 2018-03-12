@@ -8,25 +8,32 @@ All heat templats can be used via [horizon](https://openstack.cloudvps.com) howe
 See our [getting started guide](https://www.cloudvps.nl/openstack/openstack-getting-started-command-line) on how to use the commandline client.
 
 ## separate_examples
-**Default_networking.yml**: Create a basic internal network, router and a allow-all securitygroup.
+**Default_networking.yml**:
+ Create a basic internal network, router and a allow-all securitygroup.
+
+Use as: ```openstack stack create -t Default_networking.yml <STACK_NAME>```
 
 ---
-**webservers.yml**: Add servers to existing network and install apache2
+**webservers.yml**:
+ Add servers to existing network and install apache2
 
 ---
-**LBaaS.yml**: Create a LBaaS Loadbalancer for existing servers in a internal network.  
+**LBaaS.yml**:
+ Create a LBaaS Loadbalancer for existing servers in a internal network.  
 
 *WIP: Needs to have ports attached to the LB for the security group to work*
 
 *WIP: %index% does not work, use LBaaS_2servers.yml instead.*
 
 ---
-**LBaaS_2servers.yml**: Create a LBaaS Loadbalancer for existing servers in a internal network.
+**LBaaS_2servers.yml**:
+ Create a LBaaS Loadbalancer for existing servers in a internal network.
 
 *WIP: Needs to have ports attached to the LB for the security group to work*
 
 ---
-**VRRP_2servers.yml**: Create 2 instances with a additional port for VRRP in a existing internal network.
+**VRRP_2servers.yml**:
+ Create 2 instances with a additional port for VRRP in a existing internal network.
 
 Use as: ```openstack stack create -t VRRP_2instances.yml <STACK_NAME>```
 
@@ -45,7 +52,16 @@ Example on how to create an autoscaling rtmp cluster.
 
 For more info check out our [blog post](https://www.cloudvps.com/blog/our-christmas-tree-project)
 
-
+## keepalived_vrrp_example
+Example on how to create a VRRP setup with the required components.
+For more information on VRRP setup check out our [blog post](https://www.cloudvps.com/blog/vrrp-on-openstack )
+- new network
+- new router
+- reserved port on the new network
+- two ubuntu instances
+- install and configure keepalived
+- create a security group that allows vrrp and icmp
+- configure the correct metadata keys to allow VRRP
 
 
 ## cluster_example_basic
