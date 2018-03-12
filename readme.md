@@ -12,13 +12,14 @@ Separate examples can also be used via the [horizon interface](https://openstack
 Under "Orchestration" you will find "Stacks" where you can launch new stacks by referring to files or the gitlab raw url's.
 
 **Default_networking.yml**:
- Create a basic internal network, router and a allow-all securitygroup.
+Create a basic internal network, router and a allow-all securitygroup.
 
 Use as: ```openstack stack create -t Default_networking.yml <STACK_NAME>```
 
 ---
 **webservers.yml**:
- Add servers to existing network and install apache2
+Add servers to existing internal network and install apache2 via userdata.
+Requires the presence of an internal network, by default named net-private like in "Default_networking.yml".
 
 Use as: ```openstack stack create -t webservers.yml --parameter key_name=<KEY_NAME> <STACK_NAME>
 
@@ -38,9 +39,9 @@ Use as: ```openstack stack create -t webservers.yml --parameter key_name=<KEY_NA
 
 ---
 **VRRP_2servers.yml**:
- Create 2 instances with a additional port for VRRP in a existing internal network.
+ Create 2 instances with a additional port for VRRP in a existing internal network and setup a basic haproxy configuration.
 
-Use as: ```openstack stack create -t VRRP_2instances.yml <STACK_NAME>```
+Use as: ```openstack stack create -t VRRP_2instances.yml --parameter key_name=<KEY_NAME> --parameter floating_ips=<FLOATING_IP> <STACK_NAME>```
 
 
 The more comprehensive examples require the use of multiple environment files and are only supported via the commandline.

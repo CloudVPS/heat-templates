@@ -26,7 +26,7 @@ parameters:
     type: string
     label: SSH Key
     description: Name or id of your ssh key
-    default: jumphost
+    default: 
 
   flavor: 
     type: string
@@ -70,6 +70,17 @@ parameters:
     description: Name or ID of the existing security group for the instances (VRRP is allowed in new group)
     default: default
 
+  webserver1:
+    type: string
+    label: Internal websever IP
+    description: IP for the internal servers
+    default: "10.0.0.3"
+
+  webserver2:
+    type: string
+    label: Internal websever IP
+    description: IP for the internal servers
+    default: "10.0.0.4"
 
 resources:
 
@@ -89,6 +100,16 @@ resources:
           direction: ingress
           port_range_min: 22
           port_range_max: 22
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: 80
+          port_range_max: 80
+        - remote_ip_prefix: 0.0.0.0/0
+          protocol: tcp
+          direction: ingress
+          port_range_min: 8000
+          port_range_max: 8000
         - remote_ip_prefix: 0.0.0.0/0
           protocol: tcp
           direction: egress
@@ -151,7 +172,7 @@ resources:
             #!/bin/bash
             apt-get update
             apt-get update
-            apt install keepalived -y
+            apt install keepalived haproxy -y
             echo "
             vrrp_sync_group VG_1 {
                  group {
@@ -159,14 +180,11 @@ resources:
                  }
             }
             
-            }
-            
             vrrp_instance INTERN {
                 interface eth0
                 virtual_router_id 99
                 state EQUAL
                 advert_int 1
-                smtp_alert
             
                 authentication {
                     auth_type PASS
@@ -178,12 +196,46 @@ resources:
                 }
             }
             
-            " >> /etc/keepalived/keepalived.conf
-            service keepalived restart
+            " > /etc/keepalived/keepalived.conf
+            systemctl keepalived restart
+
+            echo "frontend http-in
+                  mode http
+                  bind 0.0.0.0:80
+                  default_backend appservers
+            
+            backend appservers
+                  mode            http
+                  balance         roundrobin
+                  http-check      expect rstatus (2|3)[0-9][0-9]
+
+            #Server list should be made dynamic, but this works for now.
+                  server          app1 $webserver1:80 check
+                  server          app2 $webserver2:80 check
+
+            frontend Statistics
+                  mode http
+                  bind 0.0.0.0:8000
+                  option contstats
+                  default_backend HAProxy-Statistics
+            
+            backend HAProxy-Statistics
+                  mode http
+                  stats enable
+                  stats uri /stats
+                  stats refresh 10s
+                  stats show-node
+                  stats show-legends
+
+            " >> /etc/haproxy/haproxy.cfg
+            systemctl restart haproxy
+            sleep 60; systemctl restart keepalived
+
           params:
             $vip: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
             $auth_pass: {get_attr: [auth_pass, value]}
-
+            $webserver1: {get_param: webserver1}
+            $webserver2: {get_param: webserver2}
 
   instance02:
     type: OS::Nova::Server
@@ -196,14 +248,13 @@ resources:
       networks: [{ network: { get_param: private_net }}]
       security_groups: [{ get_resource: sec_group_vrrp }]
       metadata: {"ha_vip_address": { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]},"ha_floatingips": { get_param: floating_ips },"ha_execution": "1"}
-      user_data_format: RAW
       user_data:
         str_replace:
           template: |
             #!/bin/bash
             apt-get update
             apt-get update
-            apt install keepalived -y
+            apt install keepalived haproxy -y
             echo "
             vrrp_sync_group VG_1 {
                  group {
@@ -211,14 +262,11 @@ resources:
                  }
             }
             
-            }
-            
             vrrp_instance INTERN {
                 interface eth0
                 virtual_router_id 99
                 state EQUAL
                 advert_int 1
-                smtp_alert
             
                 authentication {
                     auth_type PASS
@@ -230,20 +278,56 @@ resources:
                 }
             }
             
-            " >> /etc/keepalived/keepalived.conf
-            service keepalived restart
+            " > /etc/keepalived/keepalived.conf
+            systemctl keepalived restart
+
+            echo "frontend http-in
+                  mode http
+                  bind 0.0.0.0:80
+                  default_backend appservers
+            
+            backend appservers
+                  mode            http
+                  balance         roundrobin
+                  http-check      expect rstatus (2|3)[0-9][0-9]
+
+            #Server list should be made dynamic, but this works for now.
+                  server          app1 $webserver1:80 check
+                  server          app2 $webserver2:80 check
+
+            frontend Statistics
+                  mode http
+                  bind 0.0.0.0:8000
+                  option contstats
+                  default_backend HAProxy-Statistics
+            
+            backend HAProxy-Statistics
+                  mode http
+                  stats enable
+                  stats uri /stats
+                  stats refresh 10s
+                  stats show-node
+                  stats show-legends
+
+            " >> /etc/haproxy/haproxy.cfg
+            systemctl restart haproxy
+            sleep 60; systemctl restart keepalived
+
           params:
             $vip: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
             $auth_pass: {get_attr: [auth_pass, value]}
+            $webserver1: {get_param: webserver1}
+            $webserver2: {get_param: webserver2}
+
 
 #############
 ## Outputs ##
 #############
 
-#outputs:
-#  VIP_Internal_ip:
-#    value: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
-#    description: Internal Virtual IP used in the keepalived config
+outputs:
+  VIP_Internal_ip:
+    value: { get_attr: [ vip01_port, fixed_ips, 0, ip_address ]}
+    description: Internal Virtual IP used in the keepalived config
 #  VIP_Floating_ip:
 #    value: { get_attr: [floating_ip01, floating_ip_address]}
 #    description: The Floating IP attached to the internal ip port
