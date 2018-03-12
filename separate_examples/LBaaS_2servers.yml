@@ -75,7 +75,7 @@ parameters:
     default: private-subnet
 
   security_group_name:
-    default: default-allow-all
+    default: allow-all
     description: Name of the security group for the loadbalancer
     type: string
 
