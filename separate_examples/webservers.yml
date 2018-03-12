@@ -53,7 +53,7 @@ parameters:
     default: net-private
 
   sec_group:
-    default: default-allow-all
+    default: allow-all
     label:
     description: Name of the existing security group to be used
     type: string
