@@ -7,12 +7,6 @@ parameters:
   project_id:
     type: string
 
-  api_user:
-    type: string
-
-  api_user_pass:
-    type: string
-
   key_name:
     type: string
     description: Name of keypair to assign to servers
@@ -40,10 +34,6 @@ parameters:
     type: string
     default: 80
     description: Port used by the load balancer facing external
-  lb_floatingip:
-    type: string
-    default: 
-    description: VIP used by the load balancer facing external and failing over via keepalived script
 
   appflavor:
     type: string
@@ -234,7 +224,6 @@ resources:
 ############
 ## LBaaS ###
 ############
-#not needed if you use lbserver instances
 
   loadbalancer:
     type: My::Cluster::Loadbalancer
@@ -246,165 +235,8 @@ resources:
       subnet_id: { get_resource: private_subnet }
 
 ################
-## Instances ###
+## DBSERVERS ###
 ################
-#lbserver not needed if you use lbaas
-
-  lbservers:
-    type: OS::Heat::ResourceGroup
-    properties:
-      count: {get_param: lb_count }
-      resource_def:
-          type: My::Cluster::InstanceInternal
-          properties:
-            name:
-              list_join: ['-', [ {get_param: 'OS::stack_name'}, 'lb%index%']]
-            key_name: { get_param: key_name }
-            image: { get_param: image }
-            flavor: { get_param: lbflavor }
-            private_net: { get_resource: private_net }
-            sec_group: { get_resource: sec_group_external }
-            private_subnet: { get_resource: private_subnet }
-            availability_zones: { get_param: master_availability_zones }
-            index: '%index%'
-            user_data:
-              str_replace:
-                template: |
-                  #! /bin/sh -v
-                  #The OpenStack URL's don't resolve correct from openstack itself.
-                  echo "193.138.207.10	identity.openstack.cloudvps.com" >> /etc/hosts
-                  echo "193.138.207.10  network.openstack.cloudvps.com" >> /etc/hosts
-
-                  apt-get update
-                  apt install keepalived haproxy rsyslog tcpdump python python-requests dmidecode software-properties-common python-pyasn1 -y
-                  add-apt-repository ppa:certbot/certbot -y
-                  apt-get update
-                  apt install certbot -y
-                  
-                  mkdir -p /etc/cloudvps/
-                  wget -O /etc/cloudvps/ha-ip-failover.py https://raw.githubusercontent.com/CloudVPS/openstack-ha-floating-ip-failover/master/ha-ip-failover.py
-                  chmod +x /etc/cloudvps/ha-ip-failover.py
-                  
-                  ip=$(ip a|grep -m 1 "scope global"|cut -d " " -f6|cut -d "/" -f1)
-
-                  echo '{
-                    "username": "$APIUSER",
-                    "password": "$APIUSERPASS",
-                    "tenant_id": "$PROJECTID",
-                    "floatingips": {
-                      "$FLOATINGIP": "'$ip'"
-                    } 
-                  }' > /etc/cloudvps/ha-ip-config.json
-                  
-                  echo "global_defs {
-                     router_id lb1
-                  }
-                  vrrp_sync_group VG_1 {
-                       group {
-                          INTERN
-                       }
-                  }
-                  
-                  vrrp_instance VI_1 {
-                      state MASTER
-                      interface eth0
-                      virtual_router_id 51
-                      priority 150
-                      advert_int 1
-                      authentication {
-                          auth_type PASS
-                          auth_pass changeme
-                      }
-                      notify /etc/cloudvps/ha-ip-failover.py
-                  }
-                  
-                  " >> /etc/keepalived/keepalived.conf
-                  systemctl restart keepalived
-
-                  sleep 5
-                  mkdir /etc/ssl/private/ -p
-                  
-                  certbot certonly --standalone --preferred-challenges http --http-01-port 80 -d $DOMAIN -m cees@cloudvps.com  --agree-tos -n
-
-
-
-                  cat /etc/letsencrypt/live/$DOMAIN/privkey.pem > /etc/letsencrypt/live/$DOMAIN.pem
-                  cat /etc/letsencrypt/live/$DOMAIN/cert.pem >> /etc/letsencrypt/live/$DOMAIN.pem
-                  cat /etc/letsencrypt/live/$DOMAIN/chain.pem >> /etc/letsencrypt/live/$DOMAIN.pem
-
-                  echo "frontend http-in
-                        mode http
-                        bind 0.0.0.0:80
-                  " > /etc/haproxy/haproxy.cfg
-
-                  if [ -f /etc/letsencrypt/live/$DOMAIN/privkey.pem ]; then
-                  echo "      bind 0.0.0.0:443 ssl crt /etc/letsencrypt/live/$DOMAIN.pem no-sslv3 crt-ignore-err all strict-sni" >> /etc/haproxy/haproxy.cfg
-                  fi
-
-                  echo "    
-                        default_backend appservers
-                  
-                  backend appservers
-                        mode            http
-                        fullconn        40000
-                        balance         roundrobin
-                        cookie          SERVERID insert nocache indirect
-                        option          httpchk HEAD /status.php
-                        http-check      expect rstatus (2|3)[0-9][0-9]
-                  #Server list should be made dynamic, but this works for now.
-                        server          app11 10.0.0.11:80 check 
-                        server          app12 10.0.0.12:80 check
-                        server          app13 10.0.0.13:80 check
-                        server          app14 10.0.0.14:80 check
-                        server          app15 10.0.0.15:80 check
-                        server          app16 10.0.0.16:80 check
-                        server          app17 10.0.0.17:80 check
-                        server          app18 10.0.0.18:80 check
-                        server          app19 10.0.0.19:80 check
-                        server          app20 10.0.0.20:80 check
-                        server          app21 10.0.0.21:80 check
-                        server          app22 10.0.0.22:80 check
-                        server          app23 10.0.0.23:80 check
-                        server          app24 10.0.0.24:80 check
-                        server          app25 10.0.0.25:80 check
-                        server          app26 10.0.0.26:80 check
-                        server          app27 10.0.0.27:80 check
-                        server          app28 10.0.0.28:80 check
-                        server          app29 10.0.0.29:80 check
-                  
-                  frontend Statistics
-                        mode http
-                        bind 0.0.0.0:8000
-                        option contstats
-                        default_backend HAProxy-Statistics
-                  
-                  userlist UsersFor_HAProxyStatistics
-                        group admin users admin
-                        user admin insecure-password changeme
-                  
-                  backend HAProxy-Statistics
-                        mode http
-                        stats enable
-                        stats uri /stats
-                        stats refresh 10s
-                        stats show-node
-                        stats show-legends
-                        acl AuthOkay_ReadOnly http_auth(UsersFor_HAProxyStatistics)
-                        acl AuthOkay_Admin http_auth_group(UsersFor_HAProxyStatistics) admin
-                        stats http-request auth realm HAProxy-Statistics unless AuthOkay_ReadOnly
-                        stats admin if AuthOkay_Admin
-
-                  " >> /etc/haproxy/haproxy.cfg
-                  systemctl restart haproxy
-                  
-
-                params:
-                  $FLOATINGIP: {get_param: 'lb_floatingip'}
-                  $PROJECTID: {get_param: 'project_id'}
-                  $APIUSER: {get_param: 'api_user'}
-                  $APIUSERPASS: {get_param: 'api_user_pass'}
-                  $DOMAIN: {get_param: 'example_domain'}
-
 
   dbserver_vip_port:
     type: OS::Neutron::Port
@@ -564,15 +396,9 @@ outputs:
   LBaaS_Floating_ip:
     value: { get_attr: [ loadbalancer, floating_ip ] }
     description: The floating ip of the LBaaS loadbalaner
-  LB_Floating_ip:
-    value: { get_param: 'lb_floatingip' }
-    description: The floating ip of the loadbalaner servers configured in keepalived
   Deployserver_ip:
     value: { get_attr: [ deployserver, instance_ip ] }
     description: The ip of the deployserver
-  LBservers_ip:
-    description: "internal ip addresses of lb servers"
-    value: { get_attr: [ lbservers, instance_ip]}
   Appservers_ip:
     description: "ip addresses of appservers"
     value: { get_attr: [ appservers, instance_ip]}
