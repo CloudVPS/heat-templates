@@ -68,7 +68,7 @@ parameters:
     default: 192.168.1.254
   private_net_dns_servers:
     type: comma_delimited_list
-    default: ["8.8.8.8", "8.8.4.4"]
+    default: "8.8.8.8,8.8.4.4"
   sync_net_name:
     type: string
     default: net-sync-pfsense
