@@ -1,0 +1,289 @@
+# Heat template to Create 2 pfsense instances for uses with CARP.
+# Network design based on best practices in the pfsense book https://www.netgate.com/docs/pfsense/book/highavailability/example-redundant-configuration.html
+# Use as: openstack stack create -t pfsense_as_redundant_router.yml stackname
+# 
+# Author: Cees Moerkerken, http://virtu-on.nl/
+# Copyright (C) 2017 Cees Moerkerken (CloudVPS Heat templates)
+# 
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY;
+
+heat_template_version: 2016-04-08
+
+description: A redundant router setup with pfsense (see https://www.netgate.com/docs/pfsense/book/highavailability/example-redundant-configuration.html)
+
+
+################
+## Parameters ##
+################
+
+parameters:
+  image:
+    type: string
+    default: "c9931a53-3bbb-44f3-b055-849e14716bcf"
+    description: "name or UUID of the pfSense image"
+  flavor:
+    type: string
+    default: "Standard 1GB"
+  public_net_name:
+    type: string
+    default: "cust-public"
+    description: "This could be net-public, however then you won't be able to use a HA public IP"
+  public_net_vhid:
+    type: number
+    default: 1
+    description: "Range 1-9"
+    constraints:
+      - range: { min: 1, max: 9 }
+  private_net_name:
+    type: string
+    default: "net-private-pfsense"
+  private_net_cidr:
+    type: string
+    default: 192.168.1.0/24
+  private_net_gateway:
+    type: string
+    default: 192.168.1.1
+  private_net_vhid:
+    type: number
+    default: 2
+    description: "Range 1-9"
+    constraints:
+      - range: { min: 1, max: 9 }
+  private_net_os_dns:
+    type: string
+    description: "This is always the x.x.x.2 address provided by the openstack DNS server. The address is needed as a route for the metadata Server"
+    default: 192.168.1.2
+  private_net_lb1:
+    type: string
+    default: 192.168.1.3
+  private_net_lb2:
+    type: string
+    default: 192.168.1.4
+  private_net_pool_start:
+    type: string
+    default: 192.168.1.1
+  private_net_pool_end:
+    type: string
+    default: 192.168.1.254
+  private_net_dns_servers:
+    type: comma_delimited_list
+    default: "8.8.8.8,8.8.4.4"
+  sync_net_name:
+    type: string
+    default: net-sync-pfsense
+  sync_net_cidr:
+    type: string
+    default: 172.16.1.0/24
+  sync_net_lb1:
+    type: string
+    default: 172.16.1.3
+  sync_net_lb2:
+    type: string
+    default: 172.16.1.4
+  availability_zone1:
+    type: string
+    default: AMS-EQ1
+  availability_zone2:
+    type: string
+    default: AMS-EQ3
+
+conditions:
+  is-net-public: {equals: [{get_param: public_net_name}, "net-public"]}
+  not-net-public: {not: {equals: [{get_param: public_net_name}, "net-public"]}}
+
+
+resources:
+################
+## Networking ##
+################
+## When not using net-public
+  carp_public_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+    condition: not-net-public
+
+  public_lb1_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+      allowed_address_pairs: 
+        - ip_address: { get_attr: [ carp_public_port, fixed_ips, 0, ip_address ]}
+          mac_address: 
+            str_replace:
+              template: 00:00:5e:00:01:0id%
+              params:
+                "id%": { get_param: public_net_vhid }
+      security_groups:
+        - allow-all
+    condition: not-net-public
+
+  public_lb2_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+      allowed_address_pairs: 
+        - ip_address: { get_attr: [ carp_public_port, fixed_ips, 0, ip_address ]}
+          mac_address: 
+            str_replace:
+              template: 00:00:5e:00:01:0id%
+              params:
+                "id%": { get_param: public_net_vhid }
+      security_groups:
+        - allow-all
+    condition: not-net-public
+
+## When using net-public (no public CARP address)
+  public_lb1_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+      security_groups:
+        - allow-all
+    condition: is-net-public
+
+  public_lb2_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+      security_groups:
+        - allow-all
+    condition: is-net-public
+
+## Create private network and ports
+  private_net:
+    type: OS::Neutron::Net
+    properties:
+      name: { get_param: private_net_name }
+
+  private_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: private_net }
+      cidr: { get_param: private_net_cidr }
+      dns_nameservers: { get_param: private_net_dns_servers }
+      enable_dhcp: True
+      host_routes: 
+        - nexthop: { get_param: private_net_os_dns }
+          destination: 169.254.169.254/32
+        - nexthop: { get_param: private_net_gateway }
+          destination: 0.0.0.0/0
+      gateway_ip: Null
+      allocation_pools:
+        - start: { get_param: private_net_pool_start }
+          end: { get_param: private_net_pool_end }
+
+  carp_private_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - ip_address: { get_param: private_net_gateway }
+
+  private_lb1_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - ip_address: { get_param: private_net_lb1 }
+      allowed_address_pairs: 
+        - ip_address: "1.0.0.0/0"
+        - ip_address: { get_param: private_net_gateway }
+          mac_address: 
+            str_replace:
+              template: 00:00:5e:00:01:0id%
+              params:
+                "id%": { get_param: private_net_vhid }
+      security_groups:
+        - allow-all
+
+  private_lb2_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: private_net }
+      fixed_ips:
+        - ip_address: { get_param: private_net_lb2 }
+      allowed_address_pairs: 
+        - ip_address: "1.0.0.0/0"
+        - ip_address: { get_param: private_net_gateway }
+          mac_address: 
+            str_replace:
+              template: 00:00:5e:00:01:0id%
+              params:
+                "id%": { get_param: private_net_vhid }
+      security_groups:
+        - allow-all
+
+## Create sync network and ports
+  sync_net:
+    type: OS::Neutron::Net
+    properties:
+      name: { get_param: sync_net_name }
+
+  sync_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: sync_net }
+      cidr: { get_param: sync_net_cidr }
+
+  sync_lb1_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: sync_net }
+      fixed_ips:
+        - ip_address: { get_param: sync_net_lb1 }
+      security_groups:
+        - allow-all
+
+  sync_lb2_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_resource: sync_net }
+      fixed_ips:
+        - ip_address: { get_param: sync_net_lb2 }
+      security_groups:
+        - allow-all
+
+###############
+## Instances ##
+###############
+  pfsense01:
+    type: OS::Nova::Server
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'pfsense01']]
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks: 
+        - port: { get_resource: public_lb1_port }
+        - port: { get_resource: private_lb1_port }
+        - port: { get_resource: sync_lb1_port }
+      availability_zone: { get_param: availability_zone1 }
+
+  pfsense02:
+    type: OS::Nova::Server
+    properties:
+      name:
+        list_join: ['-', [ {get_param: 'OS::stack_name'}, 'pfsense02']]
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks: 
+        - port: { get_resource: public_lb2_port }
+        - port: { get_resource: private_lb2_port }
+        - port: { get_resource: sync_lb2_port }
+      availability_zone: { get_param: availability_zone2 }
+
+
+#############
+## Outputs ##
+#############
+
+outputs:
+  CARP_Internal_ip:
+    value: { get_attr: [ carp_private_port, fixed_ips, 0, ip_address ]}
+    description: Internal Virtual IP used in the CARP config
+  CARP_Public_ip:
+    value: { get_attr: [ carp_public_port, fixed_ips, 0, ip_address ]}
+    description: Public Virtual IP used in the CARP config
+    
