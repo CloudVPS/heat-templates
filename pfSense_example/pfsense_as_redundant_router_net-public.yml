@@ -27,14 +27,8 @@ parameters:
     default: "Standard 1GB"
   public_net_name:
     type: string
-    default: "cust-public"
-    description: "This could be net-public, however then you won't be able to use a HA public IP"
-  public_net_vhid:
-    type: number
-    default: 1
-    description: "Range 1-9"
-    constraints:
-      - range: { min: 1, max: 9 }
+    default: "net-public"
+    description: "This can be net-public, however then you won't be able to use a HA public IP"
   private_net_name:
     type: string
     default: "net-private-pfsense"
@@ -88,11 +82,26 @@ parameters:
     type: string
     default: AMS-EQ3
 
-
 resources:
 ################
 ## Networking ##
 ################
+## When using net-public (no public CARP address)
+  public_lb1_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+      security_groups:
+        - allow-all
+
+  public_lb2_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: public_net_name }
+      security_groups:
+        - allow-all
+
+## Create private network and ports
   private_net:
     type: OS::Neutron::Net
     properties:
@@ -115,18 +124,6 @@ resources:
         - start: { get_param: private_net_pool_start }
           end: { get_param: private_net_pool_end }
 
-  sync_net:
-    type: OS::Neutron::Net
-    properties:
-      name: { get_param: sync_net_name }
-
-  sync_subnet:
-    type: OS::Neutron::Subnet
-    properties:
-      network_id: { get_resource: sync_net }
-      cidr: { get_param: sync_net_cidr }
-
-# Create a extra port for the CARP Virtual IP address
   carp_private_port:
     type: OS::Neutron::Port
     properties:
@@ -168,38 +165,17 @@ resources:
       security_groups:
         - allow-all
 
-  carp_public_port:
-    type: OS::Neutron::Port
+## Create sync network and ports
+  sync_net:
+    type: OS::Neutron::Net
     properties:
-      network_id: { get_param: public_net_name }
+      name: { get_param: sync_net_name }
 
-  public_lb1_port:
-    type: OS::Neutron::Port
+  sync_subnet:
+    type: OS::Neutron::Subnet
     properties:
-      network_id: { get_param: public_net_name }
-      allowed_address_pairs: 
-        - ip_address: { get_attr: [ carp_public_port, fixed_ips, 0, ip_address ]}
-          mac_address: 
-            str_replace:
-              template: 00:00:5e:00:01:0id%
-              params:
-                "id%": { get_param: public_net_vhid }
-      security_groups:
-        - allow-all
-
-  public_lb2_port:
-    type: OS::Neutron::Port
-    properties:
-      network_id: { get_param: public_net_name }
-      allowed_address_pairs: 
-        - ip_address: { get_attr: [ carp_public_port, fixed_ips, 0, ip_address ]}
-          mac_address: 
-            str_replace:
-              template: 00:00:5e:00:01:0id%
-              params:
-                "id%": { get_param: public_net_vhid }
-      security_groups:
-        - allow-all
+      network_id: { get_resource: sync_net }
+      cidr: { get_param: sync_net_cidr }
 
   sync_lb1_port:
     type: OS::Neutron::Port
@@ -257,7 +233,4 @@ outputs:
   CARP_Internal_ip:
     value: { get_attr: [ carp_private_port, fixed_ips, 0, ip_address ]}
     description: Internal Virtual IP used in the CARP config
-  CARP_Public_ip:
-    value: { get_attr: [ carp_public_port, fixed_ips, 0, ip_address ]}
-    description: Public Virtual IP used in the CARP config
     
